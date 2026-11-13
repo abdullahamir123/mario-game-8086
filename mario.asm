@@ -58,6 +58,11 @@ gameLoop:
   CMP AL, 'd'
   JE .walkRight
 
+  CMP AL, ' '  ;check if button pressed is space 
+  JE .jump     ; got to jump if space pressed
+  CMP AH, 0x39 ; scan code (space button)
+  JE .jump     
+
   CMP AL, 0x1B
   JE terminate
 
@@ -69,6 +74,14 @@ gameLoop:
 
 .walkRight:
   ADD WORD [marioWorldX], 2
+  JMP .flushBuffer ;clear extra buffered keys
+
+.jump:
+CMP BYTE [isOnGround], 1 ;check if mario on ground (1 means on ground and 0 means in sky)
+JNE .flushBuffer ; if mario in space then go back to flush buffer
+MOV WORD [marioVelY],-10 ;initial upward velocity(i choosed a random value)
+MOV BYTE [isOnGround],0 ; move mario to sky (do a jump)
+JMP .flushBuffer  ; clear extra buffered keys
 
 ;flash buffer. if multiple inputs in our buffer only one will be taken. (stop moving instantly on stop pressing)
 .flushBuffer:
@@ -79,7 +92,16 @@ gameLoop:
   INT 16H
   JMP .flushBuffer
 
-.skipKey:
+.skipKey: ;gravity and ground checks
+  ADD WORD [marioVelY],1       ; pulls down mario by 1
+  MOV AX , [marioVelY]          ; put vertical velocity in AX to add it to mariowordly
+  ADD [marioWorldY],AX          ;moves mario up or down
+  CMP  WORD [marioWorldY],120   ;checking if mario on ground
+  JL .draw                      ; jump if mario still in air
+  MOV WORD [marioWorldY],120    ; keeping mario in air
+  MOV WORD [marioVelY],0         ;vertical velcity =0
+  MOV BYTE [isOnGround],1      ; making it went back to ground so we can jump again
+.draw:
   CALL drawMario
 
 ;0X03da is vga port for status
@@ -166,8 +188,10 @@ displayFrame:
   RET
 
 ;mario: dw (120 * SCREEN_WIDTH + 20)
-marioWorldX:  dw 20
+marioWorldX: dw 20
 marioWorldY: dw 120
+marioVelY: dw 0 ; mario velocity
+isOnGround: db 1
 bufferSegment: dw 0
 
 stackSpace: times 1024 db 0
