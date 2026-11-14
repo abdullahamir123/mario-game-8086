@@ -4,6 +4,9 @@
 %define MARIOHEIGHT 40
 %define MARIOWIDTH  20
 
+%define MAPCOLUMNS 60
+%define SCREENCOLUMNS 20
+
 [ORG 0x100]
 
 START:
@@ -34,10 +37,11 @@ gameLoop:
   MOV AX, [bufferSegment]
   MOV ES, AX
 
+  CALL HUD
   CALL sky
-  CALL ground
 
-;get key from keybaord
+.input:
+  ;get key from keybaord
   MOV AH, 0x01
   INT 0x16
   JZ .skipKey
@@ -58,10 +62,10 @@ gameLoop:
   CMP AL, 'd'
   JE .walkRight
 
-  CMP AL, ' '  ;check if button pressed is space 
+  CMP AL, ' '  ;check if button pressed is space
   JE .jump     ; got to jump if space pressed
   CMP AH, 0x39 ; scan code (space button)
-  JE .jump     
+  JE .jump
 
   CMP AL, 0x1B
   JE terminate
@@ -70,18 +74,18 @@ gameLoop:
 
 .walkLeft:
   SUB WORD [marioWorldX], 2
-  JMP .skipKey
+  JMP .flushBuffer
 
 .walkRight:
   ADD WORD [marioWorldX], 2
   JMP .flushBuffer ;clear extra buffered keys
 
 .jump:
-CMP BYTE [isOnGround], 1 ;check if mario on ground (1 means on ground and 0 means in sky)
-JNE .flushBuffer ; if mario in space then go back to flush buffer
-MOV WORD [marioVelY],-10 ;initial upward velocity(i choosed a random value)
-MOV BYTE [isOnGround],0 ; move mario to sky (do a jump)
-JMP .flushBuffer  ; clear extra buffered keys
+  CMP BYTE [isOnGround], 1 ;check if mario on ground (1 means on ground and 0 means in sky)
+  JNE .flushBuffer ; if mario in space then go back to flush buffer
+  MOV WORD [marioVelY],-10 ;initial upward velocity(i choosed a random value)
+  MOV BYTE [isOnGround],0 ; move mario to sky (do a jump)
+  JMP .flushBuffer  ; clear extra buffered keys
 
 ;flash buffer. if multiple inputs in our buffer only one will be taken. (stop moving instantly on stop pressing)
 .flushBuffer:
@@ -101,8 +105,8 @@ JMP .flushBuffer  ; clear extra buffered keys
   MOV WORD [marioWorldY],120    ; keeping mario in air
   MOV WORD [marioVelY],0         ;vertical velcity =0
   MOV BYTE [isOnGround],1      ; making it went back to ground so we can jump again
+
 .draw:
-  CALL drawMario
 
 ;0X03da is vga port for status
 ;only imp port is 3rd (counting from 0).
@@ -138,38 +142,20 @@ terminate:
   MOV AX, 4C00H
   INT 21H
 
+HUD:; drawing the top bar for score at end
+  XOR DI, DI
+  MOV AL, 0
+  MOV CX, (SCREEN_WIDTH*8)
+  REP STOSB
+  ret
 
 sky:
-  cld
-  XOR DI, DI
+  MOV DI, (SCREEN_WIDTH * 8)
   MOV AL, 77
-  MOV CX, (160 * SCREEN_WIDTH)
+  MOV CX, ((SCREEN_HEIGHT-8) * SCREEN_WIDTH)
   REP STOSB
   RET
 
-ground:
-  cld
-  MOV DI, (160 * SCREEN_WIDTH)
-  MOV AL, 184
-  MOV CX, (40 * SCREEN_WIDTH)
-  REP STOSB
-  RET
-
-drawMario:
-  MOV CX, 320;
-  MOV AX, [marioWorldY]
-  MUL CX
-  ADD AX, [marioWorldX]
-  MOV DI, AX
-  MOV DX, MARIOHEIGHT
-.outer:
-  MOV CX, MARIOWIDTH
-  MOV AL, 4
-  REP STOSB
-  ADD DI, (SCREEN_WIDTH - MARIOWIDTH)
-  DEC DX
-  JNZ .outer
-  RET
 
 displayFrame:
   PUSH DS
@@ -178,7 +164,6 @@ displayFrame:
   MOV AX, 0xA000
   MOV ES, AX
 
-  cld
   XOR SI, SI
   XOR DI, DI
   MOV CX, 32000  ; 32,000 words = 64,000 bytes
@@ -187,11 +172,11 @@ displayFrame:
   POP DS
   RET
 
-;mario: dw (120 * SCREEN_WIDTH + 20)
 marioWorldX: dw 20
 marioWorldY: dw 120
 marioVelY: dw 0 ; mario velocity
 isOnGround: db 1
+
 bufferSegment: dw 0
 
 stackSpace: times 1024 db 0
