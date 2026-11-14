@@ -39,6 +39,8 @@ gameLoop:
 
   CALL HUD
   CALL sky
+  CALL drawMap
+
 
 .input:
   ;get key from keybaord
@@ -68,9 +70,8 @@ gameLoop:
   JE .jump
 
   CMP AL, 0x1B
-  JE terminate
-
-  JMP .skipKey
+  JNE .skipKey
+  JMP terminate
 
 .walkLeft:
   SUB WORD [marioWorldX], 2
@@ -107,6 +108,13 @@ gameLoop:
   MOV BYTE [isOnGround],1      ; making it went back to ground so we can jump again
 
 .draw:
+  MOV BX, mario_idle
+  MOV AX, [marioWorldY]
+  MOV CX, SCREEN_WIDTH
+  MUL CX
+  ADD AX, [marioWorldX]
+  MOV DI, AX; basically, (marioY*SCREENWIDTH)+marioX (location of mario)
+  CALL draw
 
 ;0X03da is vga port for status
 ;only imp port is 3rd (counting from 0).
@@ -156,6 +164,81 @@ sky:
   REP STOSB
   RET
 
+draw:
+  ;BX must be at asset to draw
+  ;DI must be where on screen to draw
+  XOR AX, AX
+  MOV AL, [BX]
+  MOV WORD [assetWidth], AX
+  MOV AL, [BX+1]
+  MOV WORD [assetHeight], AX
+
+  ADD BX, 2
+  MOV SI, 0;si holds how many pixels have been drawn in current col
+
+.readPair:
+  MOV AL, [BX];al has color
+  XOR CX, CX
+  MOV CL, [BX+1]; cl has color count
+
+.pixelLoop:
+  CMP AL, 248;248 is our custom code for transparent color (draw nothing)
+  JE .skipPixel
+  MOV BYTE [ES:DI], AL
+.skipPixel:
+  INC DI
+  INC SI
+
+  CMP SI, [assetWidth]
+  JNE .notEndOfRow
+
+  MOV SI, 0
+  ADD DI, SCREEN_WIDTH
+  SUB DI, [assetWidth]; we go from right of one row of asset to bottom left(start) of next column
+  DEC WORD [assetHeight]
+  JZ .done
+
+.notEndOfRow:
+  LOOP .pixelLoop
+  ADD BX, 2;move to next pair
+  JMP .readPair
+
+.done:
+  ret
+
+
+drawMap:
+  MOV DI, (8*SCREEN_WIDTH);for dem pixels
+  XOR SI, SI;for iterating the map
+  MOV DX, 12; number of columns in screen
+.mapOuterLoop:
+  MOV CX, 20; columns in screen. each is 16 byte asset
+.mapLoop:
+  XOR BX, BX
+  MOV BL, [worldMap+SI]; holds map current asset code.
+  ADD BL, BL ;tileTable is dw not db
+  MOV BX, [tileTable+BX]
+  CMP BX, 0;0 in tileTable means sky(skip)
+  JE .skipMap
+  ;save all imp registers and draw the current asset
+  PUSH SI
+  PUSH DI
+  PUSH CX
+  PUSH BX
+  call draw
+  POP BX
+  POP CX
+  POP DI
+  POP SI
+.skipMap:
+  INC SI;
+  ADD DI, 16; jump 16 columns in screen(each asset is 16 columns)
+  LOOP .mapLoop
+  ADD SI, (MAPCOLUMNS-SCREENCOLUMNS); move SI to next row first value of map
+  ADD DI, (15*SCREEN_WIDTH); looped through a screen row already so need to skip next 15 not 16.
+  DEC DX
+  JNZ .mapOuterLoop
+  ret
 
 displayFrame:
   PUSH DS
