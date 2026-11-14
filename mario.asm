@@ -1,9 +1,6 @@
 %define SCREEN_WIDTH  320
 %define SCREEN_HEIGHT 200
 
-%define MARIOHEIGHT 40
-%define MARIOWIDTH  20
-
 %define MAPCOLUMNS 60
 %define SCREENCOLUMNS 20
 
@@ -40,9 +37,14 @@ gameLoop:
   CALL HUD
   CALL sky
   CALL drawMap
+  CALL input
+  CALL gravity
+  CALL drawMario
+  CALL screenSync
+  CALL displayFrame
+  JMP gameLoop
 
-
-.input:
+input:
   ;get key from keybaord
   MOV AH, 0x01
   INT 0x16
@@ -96,33 +98,17 @@ gameLoop:
   MOV AH, 00H
   INT 16H
   JMP .flushBuffer
+.skipKey:
+  ret
 
-.skipKey: ;gravity and ground checks
-  ADD WORD [marioVelY],1       ; pulls down mario by 1
-  MOV AX , [marioVelY]          ; put vertical velocity in AX to add it to mariowordly
-  ADD [marioWorldY],AX          ;moves mario up or down
-  CMP  WORD [marioWorldY],120   ;checking if mario on ground
-  JL .draw                      ; jump if mario still in air
-  MOV WORD [marioWorldY],120    ; keeping mario in air
-  MOV WORD [marioVelY],0         ;vertical velcity =0
-  MOV BYTE [isOnGround],1      ; making it went back to ground so we can jump again
+  ;0X03da is vga port for status
+  ;only imp port is 3rd (counting from 0).
+  ;if bit 3 is 0, currently drawing. if we call new display frame, we get screen tear
+  ;if bit 3 is 1, it currentl reseting itself to pizel 0.
+  ;loop1: wait until drawing starts
+  ;loop2: once drawing start. wait until reset comes
+  ;we check until it gets 1 and then display frame.
 
-.draw:
-  MOV BX, mario_idle
-  MOV AX, [marioWorldY]
-  MOV CX, SCREEN_WIDTH
-  MUL CX
-  ADD AX, [marioWorldX]
-  MOV DI, AX; basically, (marioY*SCREENWIDTH)+marioX (location of mario)
-  CALL draw
-
-;0X03da is vga port for status
-;only imp port is 3rd (counting from 0).
-;if bit 3 is 0, currently drawing. if we call new display frame, we get screen tear
-;if bit 3 is 1, it currentl reseting itself to pizel 0.
-;loop1: wait until drawing starts
-;loop2: once drawing start. wait until reset comes
-;we check until it gets 1 and then display frame.
 screenSync:
   MOV DX, 0x03DA
 .waitEnd:
@@ -133,22 +119,20 @@ screenSync:
   IN AL, DX
   TEST AL, 00001000B
   JZ .waitStart
+  RET
 
-  CALL displayFrame
-  JMP gameLoop
-
-terminate:
-  ;return to standard text mode
-  MOV AX, 0003H
-  INT 10H
-
-  ;free the framebuffer memory
-  MOV ES, [bufferSegment]
-  MOV AH, 49H
-  INT 21H
-
-  MOV AX, 4C00H
-  INT 21H
+getTile:
+  ;bx gets pixelx
+  ;ax gets pixely
+  SUB AX, 8;remove top HUD
+  SHR BX, 4; divide by 16 so we get map column number
+  SHR AX, 4; divide by 16 gets map row number
+  MOV CX, MAPCOLUMNS
+  MUL CX
+  ADD AX, BX; (mapRow*totalcolumns)+mapCol
+  MOV SI, AX
+  MOV AL, [worldMap+SI]
+  ret
 
 HUD:; drawing the top bar for score at end
   XOR DI, DI
@@ -164,7 +148,46 @@ sky:
   REP STOSB
   RET
 
-draw:
+gravity:
+;first check left foot of mario
+  MOV AX, [marioWorldY]
+  MOV BX, [marioWorldX]
+  ADD AX, [marioHeight]
+  CALL getTile; gives back a tile in AL (marios left most bottom pixel)
+  CMP AL, 0; if sky we fall
+  JZ .checkRightFoot
+  CMP AL, 5; check if coin
+  JE .checkRightFoot
+  JMP .skipFall
+.checkRightFoot:
+;now check right foot
+  MOV AX, [marioWorldY]
+  MOV BX, [marioWorldX]
+  ADD AX, [marioHeight]
+  ADD BX, [marioWidth]
+  DEC BX; dec by one (if we jump 16 pixels itll be on after mario. so basically 16-1 (15))
+  CALL getTile; gives back a tile in AL (marios right most bottom pixel)
+  CMP AL, 0; if sky we fall
+  JZ .fall
+  CMP AL, 5; check if coin
+  JE .fall
+  JMP .skipFall
+.fall:
+  ADD WORD [marioWorldY], 1
+.skipFall:
+  ret
+
+drawMario:
+  MOV BX, mario_idle
+  MOV AX, [marioWorldY]
+  MOV CX, SCREEN_WIDTH
+  MUL CX
+  ADD AX, [marioWorldX]
+  MOV DI, AX; basically, (marioY*SCREENWIDTH)+marioX (location of mario)
+  CALL drawAsset
+  ret
+
+drawAsset:
   ;BX must be at asset to draw
   ;DI must be where on screen to draw
   XOR AX, AX
@@ -225,7 +248,7 @@ drawMap:
   PUSH DI
   PUSH CX
   PUSH BX
-  call draw
+  call drawAsset
   POP BX
   POP CX
   POP DI
@@ -255,8 +278,24 @@ displayFrame:
   POP DS
   RET
 
+terminate:
+  ;return to standard text mode
+  MOV AX, 0003H
+  INT 10H
+
+  ;free the framebuffer memory
+  MOV ES, [bufferSegment]
+  MOV AH, 49H
+  INT 21H
+
+  MOV AX, 4C00H
+  INT 21H
+
 marioWorldX: dw 20
 marioWorldY: dw 120
+
+marioHeight: dw 16
+marioWidth: dw 16
 
 assetWidth: dw 0
 assetHeight: dw 0
