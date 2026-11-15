@@ -29,6 +29,24 @@ START:
   MOV AX, 0013H
   INT 10H
 
+  ;int 16h and int 21h is usually used with AH 0x00 or 0x01 for keybaord interrupts.
+  ;but it only allows one input at a time make jumping while running impossible.
+  ;hence we have to make our own keyboard interrupt handler
+
+  ;we fetch interrupt vector for keybaord. it gives us offset in bx and segment in ax.
+  ;we save in memory. this is because we need to reset to old keyHandler after our program finishes.
+  ;once thats done save address of our own keyHandler into the IVT (interrupt vector table)
+  MOV AX, 0x3509
+  INT 0x21
+  ;with int 21H, AH 35H means fetch interrupt vector. AL 09 specifies which vector (09H is for keybaord)
+  MOV WORD [oldInterrupt9Offset], BX
+  MOV AX, ES
+  MOV WORD [oldInterrupt9Segment], AX
+  ;with int 21H, AH 35H means write on interrupt vector. AL 09 specifies which vector (09H is for keybaord)
+  MOV DX, keyHandler
+  MOV AX, 0x2509
+  INT 0x21
+
 gameLoop:
   ;always ensure ES points to the backbuffer before drawing
   MOV AX, [bufferSegment]
@@ -44,62 +62,79 @@ gameLoop:
   CALL displayFrame
   JMP gameLoop
 
+; keyhandler is not called by us it is called whenever a key is pressed
+; this means it can be called during instruction. this is why it does not only push IP but also but also CS and flags
+; this means it requires special return called iret
+; we must also push all registers we use in keyhandler incase it had something valuable in it
+; it simply checks whihc key is pressed and updates keydown array
+keyHandler:
+  PUSH AX
+  PUSH BX
+  PUSH CX
+  MOV CX, 1
+  XOR AH, AH
+  IN AL, 0x60;keybaord interrupt key
+  ;in from port 60 gives us keycode in first 0 to 6 bits and 1 or 0 in last bit depending if pressed or released
+  TEST AL, 0x80 ;(1000 0000). checking if 7th bit on(if pressed or not)
+  JZ .pressed
+  AND AL, 0X7F; (0111 1111 clearing last bit)
+  XOR CX, CX
+.pressed:
+  MOV BX, AX
+  MOV BYTE [CS:keyDown+ BX], CL; if not pressed cl will be 0. if pressed cl is 1
+.done:
+  MOV AL, 0x20 ; moving 0x20 into al and then feeding to PIC tells it interrupt has finished. and code can continue now
+  OUT 0x20, AL;port 20 is interrupt controller
+  POP CX
+  POP BX
+  POP AX
+  IRET; need to used iret instead of ret for interrupts
+
+
 input:
-  ;get key from keybaord
-  MOV AH, 0x01
-  INT 0x16
-  JZ .skipKey
-  MOV AH, 0x00
-  INT 0x16
-
-  CMP AH, 0x4B
+  ;port 0x60 scancodes:
+  ;ESC: 0x01
+  ;A: 0x1E
+  ;Left Arrow: 0x4B
+  ;D: 0x20
+  ;Right Arrow: 0x4D
+  ;W: 0x11
+  ;Spacebar: 0x39
+  ;Up Arrow: 0x48
+  CMP BYTE [keyDown + 0x1E], 1
   JE .walkLeft
-  CMP AL, 'A'
+  CMP BYTE [keyDown + 0x4B], 1
   JE .walkLeft
-  CMP AL, 'a'
-  JE .walkLeft
-
-  CMP AH, 0x4D
-  JE .walkRight
-  CMP AL, 'D'
-  JE .walkRight
-  CMP AL, 'd'
-  JE .walkRight
-
-  CMP AL, ' '  ;check if button pressed is space
-  JE .jump     ; got to jump if space pressed
-  CMP AH, 0x39 ; scan code (space button)
-  JE .jump
-
-  CMP AL, 0x1B
-  JNE .skipKey
-  JMP terminate
-
-.walkLeft:
+  JMP .noLeft
+  .walkLeft:
   SUB WORD [marioWorldX], 2
-  JMP .flushBuffer
-
-.walkRight:
+  .noLeft:
+  CMP BYTE [keyDown + 0x20], 1
+  JE .walkRight
+  CMP BYTE [keyDown + 0x4D], 1
+  JE .walkRight
+  JMP .noRight
+  .walkRight:
   ADD WORD [marioWorldX], 2
-  JMP .flushBuffer ;clear extra buffered keys
-
-.jump:
-  CMP BYTE [isOnGround], 1 ;check if mario on ground (1 means on ground and 0 means in sky)
-  JNE .flushBuffer ; if mario in space then go back to flush buffer
-  MOV WORD [marioVelY],-10 ;initial upward velocity(i choosed a random value)
-  MOV BYTE [isOnGround],0 ; move mario to sky (do a jump)
-  JMP .flushBuffer  ; clear extra buffered keys
-
-;flash buffer. if multiple inputs in our buffer only one will be taken. (stop moving instantly on stop pressing)
-.flushBuffer:
-  MOV AH, 01H
-  INT 16H
-  JZ .skipKey
-  MOV AH, 00H
-  INT 16H
-  JMP .flushBuffer
-.skipKey:
-  ret
+  .noRight:
+  CMP BYTE [keyDown + 0x11], 1
+  JE .jump
+  CMP BYTE [keyDown + 0x39], 1
+  JE .jump
+  CMP BYTE [keyDown + 0x48], 1
+  JE .jump
+  JMP .noJump
+  .jump:
+  CMP BYTE [isOnGround], 1
+  JNE .noJump
+  MOV WORD [marioVelY], -10
+  MOV BYTE [isOnGround], 0
+  .noJump:
+  CMP BYTE [keyDown + 0x01], 1
+  JNE .done
+  JMP terminate
+  .done:
+  RET
 
   ;0X03da is vga port for status
   ;only imp port is 3rd (counting from 0).
@@ -120,6 +155,59 @@ screenSync:
   TEST AL, 00001000B
   JZ .waitStart
   RET
+
+gravity:
+  MOV AX, [marioVelY]
+  ADD WORD [marioWorldY], AX
+  INC WORD [marioVelY]
+  CMP WORD [marioVelY], 8
+  JLE .validVelocity
+  MOV WORD [marioVelY], 8
+.validVelocity:
+  CMP WORD [marioVelY], 0
+  JL .inAir
+
+  ;first check left foot of mario
+  MOV AX, [marioWorldY]
+  MOV BX, [marioWorldX]
+  ADD AX, [marioHeight]
+  CALL getTile; gives back a tile in AL (marios left most bottom pixel)
+  CMP AL, 0; if sky we fall
+  JZ .checkRightFoot
+  CMP AL, 5; check if coin
+  JE .checkRightFoot
+  JMP .onGround
+.checkRightFoot:
+  ;now check right foot
+  MOV AX, [marioWorldY]
+  MOV BX, [marioWorldX]
+  ADD AX, [marioHeight]
+  ADD BX, [marioWidth]
+  DEC BX; dec by one (if we jump 16 pixels itll be on after mario. so basically 16-1 (15))
+  CALL getTile; gives back a tile in AL (marios right most bottom pixel)
+  CMP AL, 0; if sky we fall
+  JZ .inAir
+  CMP AL, 5; check if coin
+  JE .inAir
+
+.onGround:
+  ;because of velocity, we're actually falling more than a single pixel. may fall into ground before next check.
+  ;if happens pop up to surface
+  MOV AX, [marioWorldY]
+  ADD AX, [marioHeight]; AX will have feetY
+  SUB AX, 8 ; remove HUD offset
+  AND AX, 0xFFF0 ; round down to the tile top edge (multiple of 16)
+  ADD AX, 8 ; restore HUD offset
+  SUB AX, [marioHeight] ; convert back to mario toplefty
+  MOV [marioWorldY], AX
+
+  MOV WORD [marioVelY], 0
+  MOV BYTE [isOnGround], 1
+  RET
+.inAir:
+  MOV BYTE [isOnGround], 0
+  RET
+
 
 getTile:
   ;bx gets pixelx
@@ -147,35 +235,6 @@ sky:
   MOV CX, ((SCREEN_HEIGHT-8) * SCREEN_WIDTH)
   REP STOSB
   RET
-
-gravity:
-;first check left foot of mario
-  MOV AX, [marioWorldY]
-  MOV BX, [marioWorldX]
-  ADD AX, [marioHeight]
-  CALL getTile; gives back a tile in AL (marios left most bottom pixel)
-  CMP AL, 0; if sky we fall
-  JZ .checkRightFoot
-  CMP AL, 5; check if coin
-  JE .checkRightFoot
-  JMP .skipFall
-.checkRightFoot:
-;now check right foot
-  MOV AX, [marioWorldY]
-  MOV BX, [marioWorldX]
-  ADD AX, [marioHeight]
-  ADD BX, [marioWidth]
-  DEC BX; dec by one (if we jump 16 pixels itll be on after mario. so basically 16-1 (15))
-  CALL getTile; gives back a tile in AL (marios right most bottom pixel)
-  CMP AL, 0; if sky we fall
-  JZ .fall
-  CMP AL, 5; check if coin
-  JE .fall
-  JMP .skipFall
-.fall:
-  ADD WORD [marioWorldY], 1
-.skipFall:
-  ret
 
 drawMario:
   MOV BX, mario_idle
@@ -288,12 +347,17 @@ terminate:
   MOV AH, 49H
   INT 21H
 
+  MOV DX, [oldInterrupt9Offset]
+  MOV AX, [oldInterrupt9Segment]
+  MOV DS, AX
+  MOV AX, 0x2509
+  INT 0x21
+
   MOV AX, 4C00H
   INT 21H
 
 marioWorldX: dw 20
 marioWorldY: dw 120
-
 marioHeight: dw 16
 marioWidth: dw 16
 
@@ -304,6 +368,11 @@ cameraX: dw 0
 
 marioVelY: dw 0 ; mario velocity
 isOnGround: db 1
+
+
+keyDown: times 128 db 0
+oldInterrupt9Segment: dw 0
+oldInterrupt9Offset: dw 0
 
 ;memory format:
 ;first index width
