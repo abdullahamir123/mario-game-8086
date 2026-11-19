@@ -125,19 +125,30 @@ input:
   JMP .applyHorizontalMove
 
 .accelLeft:
-  ; accelerate left up to max walk speed (-8 quarter-pixels = -2 px/frame)
+  ; check if left shift (0x2A) is held to run faster
+  MOV CX, 8                   ; normal max walk speed (-8 quarter-pixels)
+  CMP BYTE [keyDown + 0x2A], 1
+  JNE .applyAccelLeft
+  MOV CX, 12                  ; max run speed when holding shift (-12 quarter-pixels)
+.applyAccelLeft:
+  NEG CX                      ; make speed limit negative for moving left
   DEC WORD [marioVelX]
-  CMP WORD [marioVelX], -8
+  CMP WORD [marioVelX], CX
   JGE .applyHorizontalMove
-  MOV WORD [marioVelX], -8
+  MOV [marioVelX], CX
   JMP .applyHorizontalMove
 
 .accelRight:
-  ; accelerate right up to max walk speed (+8 quarter-pixels = +2 px/frame)
+  ; check if left shift (0x2A) is held to run faster
+  MOV CX, 8                   ; normal max walk speed (+8 quarter-pixels)
+  CMP BYTE [keyDown + 0x2A], 1
+  JNE .applyAccelRight
+  MOV CX, 12                  ; max run speed when holding shift (+12 quarter-pixels)
+.applyAccelRight:
   INC WORD [marioVelX]
-  CMP WORD [marioVelX], 8
+  CMP WORD [marioVelX], CX
   JLE .applyHorizontalMove
-  MOV WORD [marioVelX], 8
+  MOV [marioVelX], CX
 
 .applyHorizontalMove:
   ; convert quarter-pixel velocity into whole pixels to move this frame
@@ -289,6 +300,18 @@ input:
   MOV WORD [marioVelY], -10
   MOV BYTE [isOnGround], 0
   .noJump:
+  ; variable jump height: if mario is moving up and jump key is released, cut upward speed
+  CMP WORD [marioVelY], -3
+  JGE .checkEsc               ; only cut off if rising faster than -3
+  CMP BYTE [keyDown + 0x11], 1
+  JE .checkEsc
+  CMP BYTE [keyDown + 0x39], 1
+  JE .checkEsc
+  CMP BYTE [keyDown + 0x48], 1
+  JE .checkEsc
+  MOV WORD [marioVelY], -3    ; player released jump early so do a small hop
+
+.checkEsc:
   CMP BYTE [keyDown + 0x01], 1
   JNE .done
   JMP terminate
