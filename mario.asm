@@ -101,118 +101,179 @@ input:
   ;W: 0x11
   ;Spacebar: 0x39
   ;Up Arrow: 0x48
-  ; check if player wants to move left (a key or left arrow)
+; --- HORIZONTAL ACCELERATION & FRICTION ---
+  ; check if player is pressing left (a or left arrow)
   CMP BYTE [keyDown + 0x1E], 1
-  JE .walkLeft
+  JE .accelLeft
   CMP BYTE [keyDown + 0x4B], 1
-  JE .walkLeft
-  JMP .noLeft
+  JE .accelLeft
 
-.walkLeft:
-  ; dont let mario walk past the start of the map on the left
-  CMP WORD [marioWorldX], 2
-  JL .noLeft
+  ; check if player is pressing right (d or right arrow)
+  CMP BYTE [keyDown + 0x20], 1
+  JE .accelRight
+  CMP BYTE [keyDown + 0x4D], 1
+  JE .accelRight
 
-  ; check marios top left corner before moving so he doesnt walk into walls
-  ; adding 2 to x because marios sprite has 2 transparent pixels on the sides
+  ; neither left nor right is held, so apply friction to slow mario down smoothly
+  CMP WORD [marioVelX], 0
+  JE .applyHorizontalMove
+  JG .frictionRight
+  INC WORD [marioVelX]        ; sliding left so push velocity back toward 0
+  JMP .applyHorizontalMove
+.frictionRight:
+  DEC WORD [marioVelX]        ; sliding right so pull velocity back toward 0
+  JMP .applyHorizontalMove
+
+.accelLeft:
+  ; accelerate left up to max walk speed (-8 quarter-pixels = -2 px/frame)
+  DEC WORD [marioVelX]
+  CMP WORD [marioVelX], -8
+  JGE .applyHorizontalMove
+  MOV WORD [marioVelX], -8
+  JMP .applyHorizontalMove
+
+.accelRight:
+  ; accelerate right up to max walk speed (+8 quarter-pixels = +2 px/frame)
+  INC WORD [marioVelX]
+  CMP WORD [marioVelX], 8
+  JLE .applyHorizontalMove
+  MOV WORD [marioVelX], 8
+
+.applyHorizontalMove:
+  ; convert quarter-pixel velocity into whole pixels to move this frame
+  MOV AX, [marioSubX]
+  ADD AX, [marioVelX]         ; add current velocity to leftover sub-pixels
+  MOV BX, AX                  ; save a copy before dividing by 4
+  SAR AX, 2                   ; signed divide by 4 to get whole pixels (dx)
+  AND BX, 3                   ; keep remainder (0..3) in sub-pixel accumulator
+  MOV [marioSubX], BX
+
+  CMP AX, 0
+  JE NEAR .noHorizontalMove   ; 0 whole pixels to move this frame
+  JL NEAR .tryMoveLeft        ; negative means moving left
+  JMP .tryMoveRight           ; positive means moving right
+
+.tryMoveLeft:
+  ; ax is negative (e.g. -1 or -2), turn it into positive step count in cx
+  NEG AX
+  MOV CX, AX
+.leftStepLoop:
+  PUSH CX
+  ; stop at left edge of world map
+  CMP WORD [marioWorldX], 1
+  JL .hitLeftWall
+
+  ; check top-left corner 1 pixel ahead
   MOV BX, [marioWorldX]
-  SUB BX, 2
-  ADD BX, 2
+  DEC BX
+  ADD BX, 2                   ; 2 px sprite border inset
   MOV AX, [marioWorldY]
-  ADD AX, 2 ; move down 2 pixels so flat ceilings dont block side walking
-  CMP AX, 8 ; make sure y is not inside the hud area or getTile will underflow
-  JGE .topLeftOk
+  ADD AX, 2
+  CMP AX, 8
+  JGE .topLeftStepOk
   MOV AX, 8
-.topLeftOk:
-  CALL getTile ; gives us the tile number in al
-  CMP AL, 0 ; 0 is sky so mario can pass
-  JE .checkBottomLeft
-  CMP AL, 5 ; 5 is coin so mario can pass
-  JE .checkBottomLeft
-  JMP .noLeft ; anything else is a solid wall so stop here
+.topLeftStepOk:
+  CALL getTile
+  CMP AL, 0
+  JE .checkBottomLeftStep
+  CMP AL, 5
+  JE .checkBottomLeftStep
+  JMP .hitLeftWall
 
-.checkBottomLeft:
-  ; now check marios bottom left corner near his feet
+.checkBottomLeftStep:
+  ; check bottom-left corner 1 pixel ahead
   MOV BX, [marioWorldX]
-  SUB BX, 2
+  DEC BX
   ADD BX, 2
   MOV AX, [marioWorldY]
   ADD AX, [marioHeight]
-  DEC AX ; subtract 1 so we stay on marios actual bottom pixel
+  DEC AX
   CMP AX, 8
-  JGE .bottomLeftOk
+  JGE .bottomLeftStepOk
   MOV AX, 8
-.bottomLeftOk:
+.bottomLeftStepOk:
   CALL getTile
   CMP AL, 0
-  JE .moveLeft
+  JE .stepLeftOne
   CMP AL, 5
-  JE .moveLeft
-  JMP .noLeft ; solid tile hit at feet level so stop
+  JE .stepLeftOne
+  JMP .hitLeftWall
 
-.moveLeft:
-  ; both corners are clear so move mario left
-  SUB WORD [marioWorldX], 2
+.stepLeftOne:
+  DEC WORD [marioWorldX]      ; safe to step 1 pixel left
+  POP CX
+  DEC CX
+  JNZ NEAR .leftStepLoop
+  JMP .noHorizontalMove
 
-.noLeft:
+.hitLeftWall:
+  POP CX
+  MOV WORD [marioVelX], 0     ; stop horizontal momentum when hitting a wall
+  MOV WORD [marioSubX], 0
+  JMP .noHorizontalMove
 
-  ; check if player wants to move right (d key or right arrow)
-  CMP BYTE [keyDown + 0x20], 1
-  JE .walkRight
-  CMP BYTE [keyDown + 0x4D], 1
-  JE .walkRight
-  JMP .noRight
-
-.walkRight:
-  ; dont let mario walk past the end of the 60 column level (60 * 16 = 960)
+.tryMoveRight:
+  ; ax is positive step count (e.g. 1 or 2)
+  MOV CX, AX
+.rightStepLoop:
+  PUSH CX
+  ; stop at right edge of 60-tile level (60 * 16 = 960)
   MOV AX, [marioWorldX]
   ADD AX, [marioWidth]
-  ADD AX, 2
   CMP AX, (MAPCOLUMNS * 16)
-  JG .noRight
+  JGE .hitRightWall
 
-  ; check marios top right corner before moving
-  ; subtracting 3 from width accounts for the transparent sprite border on the right
+  ; check top-right corner 1 pixel ahead
   MOV BX, [marioWorldX]
-  ADD BX, 2
+  INC BX
   ADD BX, [marioWidth]
-  SUB BX, 3
+  SUB BX, 3                   ; right sprite border inset
   MOV AX, [marioWorldY]
   ADD AX, 2
   CMP AX, 8
-  JGE .topRightOk
+  JGE .topRightStepOk
   MOV AX, 8
-.topRightOk:
+.topRightStepOk:
   CALL getTile
-  CMP AL, 0 ; sky is clear
-  JE .checkBottomRight
-  CMP AL, 5 ; coin is clear
-  JE .checkBottomRight
-  JMP .noRight ; hit a wall so stop moving right
+  CMP AL, 0
+  JE .checkBottomRightStep
+  CMP AL, 5
+  JE .checkBottomRightStep
+  JMP .hitRightWall
 
-.checkBottomRight:
-  ; now check marios bottom right corner near his feet
+.checkBottomRightStep:
+  ; check bottom-right corner 1 pixel ahead
   MOV BX, [marioWorldX]
-  ADD BX, 2
+  INC BX
   ADD BX, [marioWidth]
   SUB BX, 3
   MOV AX, [marioWorldY]
   ADD AX, [marioHeight]
   DEC AX
   CMP AX, 8
-  JGE .bottomRightOk
+  JGE .bottomRightStepOk
   MOV AX, 8
-.bottomRightOk:
+.bottomRightStepOk:
   CALL getTile
   CMP AL, 0
-  JE .moveRight
+  JE .stepRightOne
   CMP AL, 5
-  JE .moveRight
-  JMP .noRight ; hit a wall near feet so stop
+  JE .stepRightOne
+  JMP .hitRightWall
 
-.moveRight:
-  ; both right corners are clear so move mario right
-  ADD WORD [marioWorldX], 2
+.stepRightOne:
+  INC WORD [marioWorldX]      ; safe to step 1 pixel right
+  POP CX
+  DEC CX
+  JNZ NEAR .rightStepLoop
+  JMP .noHorizontalMove
+
+.hitRightWall:
+  POP CX
+  MOV WORD [marioVelX], 0     ; stop horizontal momentum when hitting a wall
+  MOV WORD [marioSubX], 0
+
+.noHorizontalMove:
 
 .noRight:
   CMP BYTE [keyDown + 0x11], 1
@@ -511,10 +572,10 @@ assetWidth: dw 0
 assetHeight: dw 0
 
 cameraX: dw 0
-
+marioVelX: dw 0 ; horizontal velocity in quarter-pixels (4 = 1 px/frame)
+marioSubX: dw 0 ; leftover sub-pixel accumulator for smooth movement
 marioVelY: dw 0 ; mario velocity
 isOnGround: db 1
-
 
 keyDown: times 128 db 0
 oldInterrupt9Segment: dw 0
