@@ -263,7 +263,55 @@ gravity:
   MOV WORD [marioVelY], 8
 .validVelocity:
   CMP WORD [marioVelY], 0
-  JL .inAir
+  JL .checkHead             ; mario is moving up so check if his head hits a block
+  JMP .checkLeftFoot        ; mario is falling or still so check his feet
+
+.checkHead:
+  ; make sure mario doesnt jump above the top hud bar (y < 8)
+  CMP WORD [marioWorldY], 8
+  JGE .headNotAtCeiling
+  MOV WORD [marioWorldY], 8
+  MOV WORD [marioVelY], 0
+  JMP .inAir
+
+.headNotAtCeiling:
+  ; check top left corner of marios head (using 2 px inset so side walls dont snag)
+  MOV BX, [marioWorldX]
+  ADD BX, 2
+  MOV AX, [marioWorldY]
+  CALL getTile              ; gives tile number in al
+  CMP AL, 0                 ; 0 is sky so keep going up
+  JE .checkRightHead
+  CMP AL, 5                 ; 5 is coin so keep going up
+  JE .checkRightHead
+  JMP .hitHead              ; solid block above left side of head
+
+.checkRightHead:
+  ; check top right corner of marios head
+  MOV BX, [marioWorldX]
+  ADD BX, [marioWidth]
+  SUB BX, 3
+  MOV AX, [marioWorldY]
+  CALL getTile
+  CMP AL, 0                 ; sky is clear
+  JE .inAir
+  CMP AL, 5                 ; coin is clear
+  JE .inAir
+
+.hitHead:
+  ; mario bonked his head on a solid block above him
+  ; push his head down to the bottom edge of the block so he doesnt clip inside
+  MOV AX, [marioWorldY]
+  SUB AX, 8                 ; remove top hud offset
+  AND AX, 0xFFF0            ; round down to the top edge of the tile he hit
+  ADD AX, 8                 ; put hud offset back
+  ADD AX, 16                ; move down 16 pixels to the bottom edge of that tile
+  MOV [marioWorldY], AX
+
+  MOV WORD [marioVelY], 0   ; stop upward speed so gravity pulls him down
+  JMP .inAir
+
+.checkLeftFoot:
 
   ;first check left foot of mario
   MOV AX, [marioWorldY]
