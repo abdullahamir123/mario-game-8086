@@ -101,22 +101,120 @@ input:
   ;W: 0x11
   ;Spacebar: 0x39
   ;Up Arrow: 0x48
+  ; check if player wants to move left (a key or left arrow)
   CMP BYTE [keyDown + 0x1E], 1
   JE .walkLeft
   CMP BYTE [keyDown + 0x4B], 1
   JE .walkLeft
   JMP .noLeft
-  .walkLeft:
+
+.walkLeft:
+  ; dont let mario walk past the start of the map on the left
+  CMP WORD [marioWorldX], 2
+  JL .noLeft
+
+  ; check marios top left corner before moving so he doesnt walk into walls
+  ; adding 2 to x because marios sprite has 2 transparent pixels on the sides
+  MOV BX, [marioWorldX]
+  SUB BX, 2
+  ADD BX, 2
+  MOV AX, [marioWorldY]
+  ADD AX, 2 ; move down 2 pixels so flat ceilings dont block side walking
+  CMP AX, 8 ; make sure y is not inside the hud area or getTile will underflow
+  JGE .topLeftOk
+  MOV AX, 8
+.topLeftOk:
+  CALL getTile ; gives us the tile number in al
+  CMP AL, 0 ; 0 is sky so mario can pass
+  JE .checkBottomLeft
+  CMP AL, 5 ; 5 is coin so mario can pass
+  JE .checkBottomLeft
+  JMP .noLeft ; anything else is a solid wall so stop here
+
+.checkBottomLeft:
+  ; now check marios bottom left corner near his feet
+  MOV BX, [marioWorldX]
+  SUB BX, 2
+  ADD BX, 2
+  MOV AX, [marioWorldY]
+  ADD AX, [marioHeight]
+  DEC AX ; subtract 1 so we stay on marios actual bottom pixel
+  CMP AX, 8
+  JGE .bottomLeftOk
+  MOV AX, 8
+.bottomLeftOk:
+  CALL getTile
+  CMP AL, 0
+  JE .moveLeft
+  CMP AL, 5
+  JE .moveLeft
+  JMP .noLeft ; solid tile hit at feet level so stop
+
+.moveLeft:
+  ; both corners are clear so move mario left
   SUB WORD [marioWorldX], 2
-  .noLeft:
+
+.noLeft:
+
+  ; check if player wants to move right (d key or right arrow)
   CMP BYTE [keyDown + 0x20], 1
   JE .walkRight
   CMP BYTE [keyDown + 0x4D], 1
   JE .walkRight
   JMP .noRight
-  .walkRight:
+
+.walkRight:
+  ; dont let mario walk past the end of the 60 column level (60 * 16 = 960)
+  MOV AX, [marioWorldX]
+  ADD AX, [marioWidth]
+  ADD AX, 2
+  CMP AX, (MAPCOLUMNS * 16)
+  JG .noRight
+
+  ; check marios top right corner before moving
+  ; subtracting 3 from width accounts for the transparent sprite border on the right
+  MOV BX, [marioWorldX]
+  ADD BX, 2
+  ADD BX, [marioWidth]
+  SUB BX, 3
+  MOV AX, [marioWorldY]
+  ADD AX, 2
+  CMP AX, 8
+  JGE .topRightOk
+  MOV AX, 8
+.topRightOk:
+  CALL getTile
+  CMP AL, 0 ; sky is clear
+  JE .checkBottomRight
+  CMP AL, 5 ; coin is clear
+  JE .checkBottomRight
+  JMP .noRight ; hit a wall so stop moving right
+
+.checkBottomRight:
+  ; now check marios bottom right corner near his feet
+  MOV BX, [marioWorldX]
+  ADD BX, 2
+  ADD BX, [marioWidth]
+  SUB BX, 3
+  MOV AX, [marioWorldY]
+  ADD AX, [marioHeight]
+  DEC AX
+  CMP AX, 8
+  JGE .bottomRightOk
+  MOV AX, 8
+.bottomRightOk:
+  CALL getTile
+  CMP AL, 0
+  JE .moveRight
+  CMP AL, 5
+  JE .moveRight
+  JMP .noRight ; hit a wall near feet so stop
+
+.moveRight:
+  ; both right corners are clear so move mario right
   ADD WORD [marioWorldX], 2
-  .noRight:
+
+.noRight:
   CMP BYTE [keyDown + 0x11], 1
   JE .jump
   CMP BYTE [keyDown + 0x39], 1
