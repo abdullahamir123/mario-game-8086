@@ -101,7 +101,6 @@ input:
   ;W: 0x11
   ;Spacebar: 0x39
   ;Up Arrow: 0x48
-; --- HORIZONTAL ACCELERATION & FRICTION ---
   ; check if player is pressing left (a or left arrow)
   CMP BYTE [keyDown + 0x1E], 1
   JE .accelLeft
@@ -118,20 +117,20 @@ input:
   CMP WORD [marioVelX], 0
   JE .applyHorizontalMove
   JG .frictionRight
-  INC WORD [marioVelX]        ; sliding left so push velocity back toward 0
+  INC WORD [marioVelX] ; sliding left so push velocity back toward 0
   JMP .applyHorizontalMove
 .frictionRight:
-  DEC WORD [marioVelX]        ; sliding right so pull velocity back toward 0
+  DEC WORD [marioVelX] ; sliding right so pull velocity back toward 0
   JMP .applyHorizontalMove
 
 .accelLeft:
   ; check if left shift (0x2A) is held to run faster
-  MOV CX, 8                   ; normal max walk speed (-8 quarter-pixels)
+  MOV CX, 16   ; normal max walk speed (2 px/frame = 16 eighths)
   CMP BYTE [keyDown + 0x2A], 1
   JNE .applyAccelLeft
-  MOV CX, 12                  ; max run speed when holding shift (-12 quarter-pixels)
+  MOV CX, 24 ; max run speed when holding shift (3 px/frame = 24 eighths)
 .applyAccelLeft:
-  NEG CX                      ; make speed limit negative for moving left
+  NEG CX  ; make speed limit negative for moving left
   DEC WORD [marioVelX]
   CMP WORD [marioVelX], CX
   JGE .applyHorizontalMove
@@ -140,10 +139,10 @@ input:
 
 .accelRight:
   ; check if left shift (0x2A) is held to run faster
-  MOV CX, 8                   ; normal max walk speed (+8 quarter-pixels)
+  MOV CX, 16  ; normal max walk speed (2 px/frame)
   CMP BYTE [keyDown + 0x2A], 1
   JNE .applyAccelRight
-  MOV CX, 12                  ; max run speed when holding shift (+12 quarter-pixels)
+  MOV CX, 24  ; max run speed when holding shift (3 px/frame)
 .applyAccelRight:
   INC WORD [marioVelX]
   CMP WORD [marioVelX], CX
@@ -151,12 +150,12 @@ input:
   MOV [marioVelX], CX
 
 .applyHorizontalMove:
-  ; convert quarter-pixel velocity into whole pixels to move this frame
+  ; convert eighth-pixel velocity into whole pixels to move this frame
   MOV AX, [marioSubX]
-  ADD AX, [marioVelX]         ; add current velocity to leftover sub-pixels
-  MOV BX, AX                  ; save a copy before dividing by 4
-  SAR AX, 2                   ; signed divide by 4 to get whole pixels (dx)
-  AND BX, 3                   ; keep remainder (0..3) in sub-pixel accumulator
+  ADD AX, [marioVelX]  ; add current velocity to leftover sub-pixels
+  MOV BX, AX  ; save a copy before dividing by 8
+  SAR AX, 3   ; signed divide by 8 to get whole pixels (dx)
+  AND BX, 7 ; keep remainder (0..7) in sub-pixel accumulator
   MOV [marioSubX], BX
 
   CMP AX, 0
@@ -211,7 +210,7 @@ input:
   JMP .hitLeftWall
 
 .stepLeftOne:
-  DEC WORD [marioWorldX]      ; safe to step 1 pixel left
+  DEC WORD [marioWorldX]   ; safe to step 1 pixel left
   POP CX
   DEC CX
   JNZ NEAR .leftStepLoop
@@ -219,7 +218,7 @@ input:
 
 .hitLeftWall:
   POP CX
-  MOV WORD [marioVelX], 0     ; stop horizontal momentum when hitting a wall
+  MOV WORD [marioVelX], 0 ; stop horizontal momentum when hitting a wall
   MOV WORD [marioSubX], 0
   JMP .noHorizontalMove
 
@@ -238,7 +237,7 @@ input:
   MOV BX, [marioWorldX]
   INC BX
   ADD BX, [marioWidth]
-  SUB BX, 3                   ; right sprite border inset
+  SUB BX, 3 ; right sprite border inset
   MOV AX, [marioWorldY]
   ADD AX, 2
   CMP AX, 8
@@ -273,7 +272,7 @@ input:
   JMP .hitRightWall
 
 .stepRightOne:
-  INC WORD [marioWorldX]      ; safe to step 1 pixel right
+  INC WORD [marioWorldX]  ; safe to step 1 pixel right
   POP CX
   DEC CX
   JNZ NEAR .rightStepLoop
@@ -281,7 +280,7 @@ input:
 
 .hitRightWall:
   POP CX
-  MOV WORD [marioVelX], 0     ; stop horizontal momentum when hitting a wall
+  MOV WORD [marioVelX], 0  ; stop horizontal momentum when hitting a wall
   MOV WORD [marioSubX], 0
 
 .noHorizontalMove:
@@ -293,23 +292,25 @@ input:
   JE .jump
   CMP BYTE [keyDown + 0x48], 1
   JE .jump
+  MOV BYTE [jumpWasDown], 0; makes it so that if jump already pressed and not released since last jump dont jump again.
   JMP .noJump
-  .jump:
+.jump:
+  
   CMP BYTE [isOnGround], 1
   JNE .noJump
-  MOV WORD [marioVelY], -10
+  MOV WORD [marioVelY], -44
   MOV BYTE [isOnGround], 0
-  .noJump:
+.noJump:
   ; variable jump height: if mario is moving up and jump key is released, cut upward speed
-  CMP WORD [marioVelY], -3
-  JGE .checkEsc               ; only cut off if rising faster than -3
+  CMP WORD [marioVelY], -12
+  JGE .checkEsc  ; only cut off if rising faster than -12
   CMP BYTE [keyDown + 0x11], 1
   JE .checkEsc
   CMP BYTE [keyDown + 0x39], 1
   JE .checkEsc
   CMP BYTE [keyDown + 0x48], 1
   JE .checkEsc
-  MOV WORD [marioVelY], -3    ; player released jump early so do a small hop
+  MOV WORD [marioVelY], -12    ; player released jump early so do a small hop
 
 .checkEsc:
   CMP BYTE [keyDown + 0x01], 1
@@ -318,37 +319,28 @@ input:
   .done:
   RET
 
-  ;0X03da is vga port for status
-  ;only imp port is 3rd (counting from 0).
-  ;if bit 3 is 0, currently drawing. if we call new display frame, we get screen tear
-  ;if bit 3 is 1, it currentl reseting itself to pizel 0.
-  ;loop1: wait until drawing starts
-  ;loop2: once drawing start. wait until reset comes
-  ;we check until it gets 1 and then display frame.
-
-screenSync:
-  MOV DX, 0x03DA
-.waitEnd:
-  IN AL, DX
-  TEST AL, 00001000B
-  JNZ .waitEnd
-.waitStart:
-  IN AL, DX
-  TEST AL, 00001000B
-  JZ .waitStart
-  RET
 
 gravity:
-  MOV AX, [marioVelY]
-  ADD WORD [marioWorldY], AX
-  INC WORD [marioVelY]
-  CMP WORD [marioVelY], 8
+  ;convert eighthpixel vertical velocity into whole pixels to move
+  MOV AX, [marioSubY]
+  ADD AX, [marioVelY] ; add current velocity to leftover sub-pixels
+  MOV BX, AX; save a copy before dividing by 8
+  SAR AX, 3  ; signed divide by 8 to get whole pixels (dy)
+  AND BX, 7  ; keep remainder (0..7) in sub-pixel accumulator
+  MOV [marioSubY], BX
+  ADD WORD [marioWorldY], AX  ; move mario up or down by whole pixels
+
+  ; apply gravity (pull downward by 2 eighths/frame, max fall speed = 48 eighths = 6 px/frame)
+  ADD WORD [marioVelY], 2
+  CMP WORD [marioVelY], 48
   JLE .validVelocity
-  MOV WORD [marioVelY], 8
+  MOV WORD [marioVelY], 48
+
 .validVelocity:
+  ;check whether mario is moving up or falling/standing
   CMP WORD [marioVelY], 0
-  JL .checkHead             ; mario is moving up so check if his head hits a block
-  JMP .checkLeftFoot        ; mario is falling or still so check his feet
+  JL .checkHead; mario is moving up so check if his head hits a block
+  JMP .checkLeftFoot ; mario is falling or still so check his feet
 
 .checkHead:
   ; make sure mario doesnt jump above the top hud bar (y < 8)
@@ -363,12 +355,12 @@ gravity:
   MOV BX, [marioWorldX]
   ADD BX, 2
   MOV AX, [marioWorldY]
-  CALL getTile              ; gives tile number in al
-  CMP AL, 0                 ; 0 is sky so keep going up
+  CALL getTile ; gives tile number in al
+  CMP AL, 0 ; 0 is sky so keep going up
   JE .checkRightHead
-  CMP AL, 5                 ; 5 is coin so keep going up
+  CMP AL, 5; 5 is coin so keep going up
   JE .checkRightHead
-  JMP .hitHead              ; solid block above left side of head
+  JMP .hitHead ; solid block above left side of head
 
 .checkRightHead:
   ; check top right corner of marios head
@@ -377,29 +369,35 @@ gravity:
   SUB BX, 3
   MOV AX, [marioWorldY]
   CALL getTile
-  CMP AL, 0                 ; sky is clear
-  JE .inAir
-  CMP AL, 5                 ; coin is clear
-  JE .inAir
+  CMP AL, 0   ; sky is clear
+  JE .clearTile
+  CMP AL, 5 ; coin is clear
+  JE .clearTile
+  JMP .blocked
+
+.clearTile:
+  JMP .inAir;had to add because of short jumps gettign out of range
+.blocked:
 
 .hitHead:
   ; mario bonked his head on a solid block above him
   ; push his head down to the bottom edge of the block so he doesnt clip inside
   MOV AX, [marioWorldY]
-  SUB AX, 8                 ; remove top hud offset
-  AND AX, 0xFFF0            ; round down to the top edge of the tile he hit
-  ADD AX, 8                 ; put hud offset back
-  ADD AX, 16                ; move down 16 pixels to the bottom edge of that tile
+  SUB AX, 8  ; remove top hud offset
+  AND AX, 0xFFF0 ; round down to the top edge of the tile he hit
+  ADD AX, 8 ; put hud offset back
+  ADD AX, 16 ; move down 16 pixels to the bottom edge of that tile
   MOV [marioWorldY], AX
 
   MOV WORD [marioVelY], 0   ; stop upward speed so gravity pulls him down
+  MOV WORD [marioSubY], 0
   JMP .inAir
 
 .checkLeftFoot:
-
   ;first check left foot of mario
   MOV AX, [marioWorldY]
   MOV BX, [marioWorldX]
+  ADD BX, 2 ; 2 px sprite border inset to match walls/head
   ADD AX, [marioHeight]
   CALL getTile; gives back a tile in AL (marios left most bottom pixel)
   CMP AL, 0; if sky we fall
@@ -413,7 +411,7 @@ gravity:
   MOV BX, [marioWorldX]
   ADD AX, [marioHeight]
   ADD BX, [marioWidth]
-  DEC BX; dec by one (if we jump 16 pixels itll be on after mario. so basically 16-1 (15))
+  SUB BX, 3 ; -1 for right edge, -2 for border inset
   CALL getTile; gives back a tile in AL (marios right most bottom pixel)
   CMP AL, 0; if sky we fall
   JZ .inAir
@@ -432,24 +430,51 @@ gravity:
   MOV [marioWorldY], AX
 
   MOV WORD [marioVelY], 0
+  MOV WORD [marioSubY], 0
   MOV BYTE [isOnGround], 1
   RET
 .inAir:
   MOV BYTE [isOnGround], 0
   RET
 
+;0X03da is vga port for status
+;only imp port is 3rd (counting from 0).
+;if bit 3 is 0, currently drawing. if we call new display frame, we get screen tear
+;if bit 3 is 1, it currentl reseting itself to pizel 0.
+;loop1: wait until drawing starts
+;loop2: once drawing start. wait until reset comes
+;we check until it gets 1 and then display frame.
+screenSync:
+  MOV DX, 0x03DA
+.waitEnd:
+  IN AL, DX
+  TEST AL, 00001000B
+  JNZ .waitEnd
+.waitStart:
+  IN AL, DX
+  TEST AL, 00001000B
+  JZ .waitStart
+  RET
 
 getTile:
   ;bx gets pixelx
   ;ax gets pixely
   SUB AX, 8;remove top HUD
+  CMP AX, 0;check out of screen bounds (top) 
+  JL .returnAir
   SHR BX, 4; divide by 16 so we get map column number
   SHR AX, 4; divide by 16 gets map row number
+  CMP AX, 12
+  JGE .returnAir
   MOV CX, MAPCOLUMNS
   MUL CX
   ADD AX, BX; (mapRow*totalcolumns)+mapCol
   MOV SI, AX
   MOV AL, [worldMap+SI]
+  JMP .validTile
+.returnAir:
+  XOR AL, AL
+.validTile
   ret
 
 HUD:; drawing the top bar for score at end
@@ -522,7 +547,7 @@ drawAsset:
 drawMap:
   MOV DI, (8*SCREEN_WIDTH);for dem pixels
   XOR SI, SI;for iterating the map
-  MOV DX, 12; number of columns in screen
+  MOV DX, 12; number of rows in screen
 .mapOuterLoop:
   MOV CX, 20; columns in screen. each is 16 byte asset
 .mapLoop:
@@ -595,14 +620,16 @@ assetWidth: dw 0
 assetHeight: dw 0
 
 cameraX: dw 0
-marioVelX: dw 0 ; horizontal velocity in quarter-pixels (4 = 1 px/frame)
+marioVelX: dw 0 ; horizontal velocity in eighth-pixels (8 = 1 px/frame)
 marioSubX: dw 0 ; leftover sub-pixel accumulator for smooth movement
 marioVelY: dw 0 ; mario velocity
+marioSubY: dw 0
 isOnGround: db 1
 
 keyDown: times 128 db 0
 oldInterrupt9Segment: dw 0
 oldInterrupt9Offset: dw 0
+jumpWasDown: db 0; to make sure player has to leave jump button and press again for two consecutive jumps
 
 ;memory format:
 ;first index width
