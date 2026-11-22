@@ -3,6 +3,13 @@ HUD:; drawing the top bar for score at end
   XOR AX, AX
   MOV CX, (SCREEN_WIDTH*HUD_HEIGHT)/2
   REP STOSW
+
+  MOV DI, 8
+  MOV SI, coinText
+  CALL drawString
+ 
+  MOV AX, [coinsCollected]
+  CALL drawNumber
   ret
 
 sky:
@@ -11,6 +18,72 @@ sky:
   MOV AH, 77
   MOV CX, ((SCREEN_HEIGHT-HUD_HEIGHT) * SCREEN_WIDTH)/2
   REP STOSW
+  RET
+
+drawChar:
+  PUSH DS
+  PUSH SI
+  PUSH DI
+
+  ; compute ROM font address: fontOffset + (ASCII * 8)
+  XOR AH, AH
+  SHL AX, 3                 ; AX = ASCII * 8
+  ADD AX, [fontOffset]
+  MOV SI, AX
+  MOV AX, [fontSegment]
+  MOV DS, AX                ; DS:SI points to 8-byte font glyph in ROM
+
+  MOV DX, 8                 ; 8 rows tall
+.rowLoop:
+  LODSB                     ; AL = 1 row byte from ROM, SI++
+  MOV CX, 8                 ; 8 pixels wide
+
+.pixelLoop:
+  SHL AL, 1                 ; push leftmost bit into Carry Flag
+  JNC .skipPixel
+  MOV BYTE [ES:DI], 15      ; bit was 1: draw crisp white pixel (color 15)
+.skipPixel:
+  INC DI
+  LOOP .pixelLoop
+
+  ADD DI, (SCREEN_WIDTH - 8); advance DI to start of next scanline
+  DEC DX
+  JNZ .rowLoop
+
+  POP DI
+  ADD DI, 8                 ; step 8 pixels right for next char
+  POP SI
+  POP DS
+  RET
+
+drawString:
+.loop:
+  LODSB                     ; AL = next char, SI++
+  CMP AL, 0
+  JE .done                  ; hit null terminator (0)
+  CALL drawChar             ; draws char and steps DI forward by 8
+  JMP .loop
+.done:
+  RET
+
+; draws a 2-digit number (00..99) from AX at current DI
+drawNumber:
+  PUSH AX
+  PUSH BX
+  MOV BL, 10
+  DIV BL                    ; AL = tens digit (quotient), AH = units digit (remainder)
+  
+  ADD AL, '0'               ; convert tens to ASCII
+  PUSH AX                   ; save remainder (AH)
+  CALL drawChar
+  POP AX
+  
+  MOV AL, AH
+  ADD AL, '0'               ; convert units to ASCII
+  CALL drawChar
+  
+  POP BX
+  POP AX
   RET
 
 drawMario:
