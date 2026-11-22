@@ -58,6 +58,7 @@ gameLoop:
 
   CALL input
   CALL gravity
+  CALL checkCoins
   CALL updateCamera
   CALL HUD
   CALL sky
@@ -334,7 +335,7 @@ gravity:
   ADD AX, [marioVelY] ; add current velocity to leftover sub-pixels
   MOV BX, AX; save a copy before dividing by 8
   SAR AX, 3  ; signed divide by 8 to get whole pixels (dy)
-  AND BX, 7  ; keep remainder (0..7) in sub-pixel accumulator
+  AND BX, 7  ; keep remainder (0 to 7) in sub-pixel accumulator
   MOV [marioSubY], BX
   ADD WORD [marioWorldY], AX  ; move mario up or down by whole pixels
 
@@ -388,15 +389,22 @@ gravity:
 .blocked:
 
 .hitHead:
-  ; mario bonked his head on a solid block above him
-  ; push his head down to the bottom edge of the block so he doesnt clip inside
+; mario bonked his head on a solid block above him
+; push his head down to the bottom edge of the block so he doesnt clip inside
+  CMP AL, 4; check if the block he bonked is question block
+  JNE .notQuestionBlock
+  MOV BYTE [worldMap + SI], 7; turn questionblock into usedquestion
+  MOV BYTE [worldMap + SI - MAPCOLUMNS], 5
+
+.notQuestionBlock:
   MOV AX, [marioWorldY]
   SUB AX, 8  ; remove top hud offset
   AND AX, 0xFFF0 ; round down to the top edge of the tile he hit
   ADD AX, 8 ; put hud offset back
   ADD AX, 16 ; move down 16 pixels to the bottom edge of that tile
-  MOV [marioWorldY], AX
 
+
+  MOV [marioWorldY], AX
   MOV WORD [marioVelY], 0   ; stop upward speed so gravity pulls him down
   MOV WORD [marioSubY], 0
   JMP .inAir
@@ -486,12 +494,48 @@ getTile:
   ret
 
 checkCoins:
-  MOV AX, [marioWorldX]
-  ADD AX, 2
-  MOV BX, [marioWorldY]
+;checks four corner pixels (from inside) of mario there is a coin.
+  ; topleft
+  MOV BX, [marioWorldX]
   ADD BX, 2
+  MOV AX, [marioWorldY]
+  ADD AX, 2
+  CALL tryCollectCoin
 
-  ADD AX, marioWidth-5 
+  ;topright
+  MOV BX, [marioWorldX]
+  ADD BX, [marioWidth]
+  SUB BX, 3
+  MOV AX, [marioWorldY]
+  ADD AX, 2
+  CALL tryCollectCoin
+
+  ;bottomleft
+  MOV BX, [marioWorldX]
+  ADD BX, 2
+  MOV AX, [marioWorldY]
+  ADD AX, [marioHeight]
+  DEC AX
+  CALL tryCollectCoin
+
+  ;bottomright
+  MOV BX, [marioWorldX]
+  ADD BX, [marioWidth]
+  SUB BX, 3
+  MOV AX, [marioWorldY]
+  ADD AX, [marioHeight]
+  DEC AX
+  CALL tryCollectCoin
+  RET
+
+tryCollectCoin:
+  CALL getTile
+  CMP AL, 5
+  JNE .notCoin
+  MOV BYTE [worldMap + SI], 0
+  INC WORD [coinsCollected]
+.notCoin:
+  RET
 
 
 HUD:; drawing the top bar for score at end
@@ -707,7 +751,6 @@ cameraX: dw 0
 drawStartX: dw 0
 drawStartY: dw 0
 assetCurrentX: dw 0
-
 
 marioWorldX: dw 20
 marioWorldY: dw 120
@@ -981,7 +1024,7 @@ worldMap:
   db  0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,5,5,0,0,0,0,0,0,0,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 ; Row 3
   db  0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 ; Row 4
   db  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,3,3,3,3,3,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,0,0,0,0,0,0,0,0 ; Row 5
-  db  0,0,0,0,0,0,0,0,0,0,3,3,3,3,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,0,0,0,5,0,5,0,0,0,0,0,0,0,0,0,0,0,5,6,0,0,0,0,0,0,0,0 ; Row 6
+  db  0,0,0,0,0,0,0,0,0,0,3,3,3,3,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,0,0,5,0,5,0,0,0,0,0,0,0,0,0,0,0,0,5,6,0,0,0,0,0,0,0,0 ; Row 6
   db  0,0,0,0,0,0,0,3,3,4,3,0,0,0,0,0,3,0,0,0,0,3,4,3,3,0,0,0,0,0,0,0,3,3,0,3,4,3,4,0,0,0,0,0,0,0,0,0,0,5,6,6,0,0,0,0,0,0,0,0 ; Row 7
   db  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,6,6,6,0,0,0,0,0,0,0,0 ; Row 8
   db  0,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,5,0,3,0,5,0,5,0,0,0,0,0,0,0,0,0,0,0,0,0,5,5,5,5,5,0,6,6,6,6,0,0,0,0,0,0,0,0 ; Row 9
@@ -996,7 +1039,7 @@ initialworldMap:; we need two world maps becuase one will change once coins etc 
   db  0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,5,5,0,0,0,0,0,0,0,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 ; Row 3
   db  0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 ; Row 4
   db  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,3,3,3,3,3,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,0,0,0,0,0,0,0,0 ; Row 5
-  db  0,0,0,0,0,0,0,0,0,0,3,3,3,3,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,0,0,0,5,0,5,0,0,0,0,0,0,0,0,0,0,0,5,6,0,0,0,0,0,0,0,0 ; Row 6
+  db  0,0,0,0,0,0,0,0,0,0,3,3,3,3,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,0,0,5,0,5,0,0,0,0,0,0,0,0,0,0,0,0,5,6,0,0,0,0,0,0,0,0 ; Row 6
   db  0,0,0,0,0,0,0,3,3,4,3,0,0,0,0,0,3,0,0,0,0,3,4,3,3,0,0,0,0,0,0,0,3,3,0,3,4,3,4,0,0,0,0,0,0,0,0,0,0,5,6,6,0,0,0,0,0,0,0,0 ; Row 7
   db  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,6,6,6,0,0,0,0,0,0,0,0 ; Row 8
   db  0,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,5,0,3,0,5,0,5,0,0,0,0,0,0,0,0,0,0,0,0,0,5,5,5,5,5,0,6,6,6,6,0,0,0,0,0,0,0,0 ; Row 9
