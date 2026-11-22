@@ -3,6 +3,10 @@
 
 %define MAPCOLUMNS 60
 %define SCREENCOLUMNS 20
+%define SCREENROWS 12
+
+%define HUD_HEIGHT 8
+
 
 [ORG 0x100]
 
@@ -52,12 +56,13 @@ gameLoop:
   MOV AX, [bufferSegment]
   MOV ES, AX
 
+  CALL input
+  CALL gravity
+  CALL updateCamera
   CALL HUD
   CALL sky
   CALL drawMap
-  CALL input
-  CALL gravity
-  CALL drawMario
+  CALL drawMario  
   CALL screenSync
   CALL displayFrame
   JMP gameLoop
@@ -462,7 +467,7 @@ screenSync:
 getTile:
   ;bx gets pixelx
   ;ax gets pixely
-  SUB AX, 8;remove top HUD
+  SUB AX, HUD_HEIGHT
   CMP AX, 0;check out of screen bounds (top) 
   JL .returnAir
   SHR BX, 4; divide by 16 so we get map column number
@@ -482,36 +487,52 @@ getTile:
 
 HUD:; drawing the top bar for score at end
   XOR DI, DI
-  MOV AL, 0
-  MOV CX, (SCREEN_WIDTH*8)
-  REP STOSB
+  XOR AX, AX
+  MOV CX, (SCREEN_WIDTH*HUD_HEIGHT)/2
+  REP STOSW
   ret
 
 sky:
-  MOV DI, (SCREEN_WIDTH * 8)
+  MOV DI, (SCREEN_WIDTH * HUD_HEIGHT)
   MOV AL, 77
-  MOV CX, ((SCREEN_HEIGHT-8) * SCREEN_WIDTH)
-  REP STOSB
+  MOV AH, 77
+  MOV CX, ((SCREEN_HEIGHT-HUD_HEIGHT) * SCREEN_WIDTH)/2
+  REP STOSW
   RET
 
 drawMario:
-  MOV BX, mario_idle
-  MOV AX, [marioWorldY]
-  MOV CX, SCREEN_WIDTH
-  MUL CX
-  ADD AX, [marioWorldX]
-  MOV DI, AX; basically, (marioY*SCREENWIDTH)+marioX (location of mario)
-  CALL drawAsset
-  ret
+MOV AX, [marioWorldX]
+SUB AX, [cameraX]
+MOV [drawStartX], AX
+MOV AX, [marioWorldY]
+MOV WORD [drawStartY], AX
+MOV BX, mario_idle
+CALL drawAsset
+ret
 
 drawAsset:
+  PUSH AX
+  PUSH BX
+  PUSH CX
+  PUSH DX
+  PUSH SI
+  PUSH DI
+  PUSH BP
+
   ;BX must be at asset to draw
-  ;DI must be where on screen to draw
   XOR AX, AX
   MOV AL, [BX]
   MOV BP, AX; asset width
   ADD BX, 2
-  MOV SI, 0;si holds how many pixels have been drawn in current col
+  MOV AX, [drawStartY]
+  MOV CX, SCREEN_WIDTH
+  MUL CX  
+  ADD AX, [drawStartX]  
+  MOV DI, AX; di gets y*screenwidth+x
+  MOV AX, [drawStartX]
+  MOV [assetCurrentX], AX
+
+  XOR SI, SI;si holds how many pixels have been drawn in current col
 .readPair:
   MOV AL, [BX];al has color 
   CMP AL, 249; custom key for end of asset
@@ -523,56 +544,97 @@ drawAsset:
   CMP AL, 248;248 is our custom code for transparent color (draw nothing)
   JE .skipPixel
 
-  REP STOSB
+ .drawLoop:
+  CMP WORD [assetCurrentX], 0;if asset is being clipped from left side, do not draw those pixels
+  JL .skipDrawPixel 
+  CMP WORD [assetCurrentX], SCREEN_WIDTH;if asset on right, we won't draw those pixels
+  JGE .skipDrawPixel
+  MOV [ES:DI], AL
+.skipDrawPixel:
+  INC DI
+  INC WORD [assetCurrentX]
+  LOOP .drawLoop
   JMP .checkEndOfRow
 
 .skipPixel:
   ADD DI, CX ; add count of transparent pixels into DI
-
+  ADD [assetCurrentX], CX
 .checkEndOfRow:
   CMP SI, BP
   JL .readPair
   ADD DI, SCREEN_WIDTH
   SUB DI, BP ; move DI to start of next row
   XOR SI, SI  ; reset row pixel counter
+  MOV AX, [drawStartX]
+  MOV [assetCurrentX], AX
   JMP .readPair
 
 .done:
+  POP BP
+  POP DI
+  POP SI
+  POP DX
+  POP CX
+  POP BX
+  POP AX 
   ret
 
 
 drawMap:
-  MOV DI, (8*SCREEN_WIDTH);for dem pixels
-  XOR SI, SI;for iterating the map
-  MOV DX, 12; number of rows in screen
+;screenw idth is exactly 20 columns. but the issue is if we move forward,
+;the first column gets slightly clipped and a new column appears on right. 
+;so we assume there are 21 columns always to print. we only skip 21st if cameraX is on frist pixel of each tile
+  MOV SI, [cameraX]
+  MOV AX, SI
+  SHR SI, 4 ;starting map column
+  AND AX, 0x000F ; gives value between 0 to 15. tells us how many pixels are cutt off
+  NEG AX
+
+  MOV WORD [drawStartY], 8  ; map starts below 8px HUD
+  MOV DX, 12 ; 12 rows on screen
+
 .mapOuterLoop:
-  MOV CX, 20; columns in screen. each is 16 byte asset
+  MOV [drawStartX], AX ; reset screenX for this row
+  MOV CX, 21
+
 .mapLoop:
+  CMP WORD [drawStartX], SCREEN_WIDTH
+  JGE .skipMap  ; skip 21 column if it starts off-screen
   XOR BX, BX
-  MOV BL, [worldMap+SI]; holds map current asset code.
-  ADD BL, BL ;tileTable is dw not db
-  MOV BX, [tileTable+BX]
-  CMP BX, 0;0 in tileTable means sky(skip)
+  MOV BL, [worldMap + SI]
+  SHL BX, 1 ; tiletable is dw
+  MOV BX, [tileTable + BX]
+  CMP BX, 0  ; skipping if sky
   JE .skipMap
-  ;save all imp registers and draw the current asset
-  PUSH SI
-  PUSH DI
-  PUSH CX
-  PUSH BX
-  call drawAsset
-  POP BX
-  POP CX
-  POP DI
-  POP SI
+  CALL drawAsset 
+
 .skipMap:
-  INC SI;
-  ADD DI, 16; jump 16 columns in screen(each asset is 16 columns)
+  INC SI
+  ADD WORD [drawStartX], 16
   LOOP .mapLoop
-  ADD SI, (MAPCOLUMNS-SCREENCOLUMNS); move SI to next row first value of map
-  ADD DI, (15*SCREEN_WIDTH); looped through a screen row already so need to skip next 15 not 16.
+
+  ADD SI, MAPCOLUMNS-21 ;makes us skip worldmap parts not on screen
+  ADD WORD [drawStartY], 16
   DEC DX
   JNZ .mapOuterLoop
+  RET
+  
+
+updateCamera:
+  MOV AX, [marioWorldX]
+  SUB AX, SCREEN_WIDTH/2
+  CMP AX, 0
+  JL .reset
+  CMP AX, (MAPCOLUMNS*16)-SCREEN_WIDTH
+  JLE .done
+  MOV AX, 640
+  JMP .done
+.reset:
+  XOR AX, AX
+.done:
+  MOV WORD [cameraX], AX
   ret
+
 
 displayFrame:
   PUSH DS
@@ -583,7 +645,7 @@ displayFrame:
 
   XOR SI, SI
   XOR DI, DI
-  MOV CX, 32000  ; 32,000 words = 64,000 bytes
+  MOV CX, 32000 
   REP MOVSW
 
   POP DS
@@ -594,16 +656,20 @@ terminate:
   MOV AX, 0003H
   INT 10H
 
-  ;free the framebuffer memory
-  MOV ES, [bufferSegment]
-  MOV AH, 49H
-  INT 21H
-
+  ;restore old interrupt in ivt
   MOV DX, [oldInterrupt9Offset]
   MOV AX, [oldInterrupt9Segment]
   MOV DS, AX
   MOV AX, 0x2509
   INT 0x21
+
+  MOV AX, CS
+  MOV DS, AX; place ds back at right address
+
+  ;free the framebuffer memory
+  MOV ES, [bufferSegment]
+  MOV AH, 49H
+  INT 21H
 
   MOV AX, 4C00H
   INT 21H
@@ -613,8 +679,11 @@ marioWorldY: dw 120
 marioHeight: dw 16
 marioWidth: dw 16
 
-
 cameraX: dw 0
+drawStartX:    dw 0
+drawStartY:    dw 0
+assetCurrentX: dw 0
+
 marioVelX: dw 0 ; horizontal velocity in eighth-pixels (8 = 1 px/frame)
 marioSubX: dw 0 ; leftover sub-pixel accumulator for smooth movement
 marioVelY: dw 0 ; mario velocity
@@ -702,7 +771,7 @@ dirtGrass:
   db 112, 2, 114, 1, 112, 2, 114, 1, 114, 3, 112, 3, 114, 5, 112, 3
   db 114, 2, 249, 249
 
-  gooma_squish:
+gooma_squish:
   db 16, 16, 248, 16, 248, 16, 248, 16, 248, 16, 248, 16, 248, 16, 248, 16
   db 248, 16, 248, 16, 248, 2, 0, 1, 114, 10, 0, 1, 248, 2, 248, 1
   db 0, 1, 114, 1, 15, 1, 0, 1, 114, 6, 0, 1, 15, 1, 114, 1
@@ -710,7 +779,7 @@ dirtGrass:
   db 114, 3, 114, 16, 248, 1, 88, 14, 248, 1, 248, 1, 88, 14, 248, 1
   db 248, 1, 0, 4, 248, 6, 0, 4, 248, 1, 249, 249
 
-  goomba:
+goomba:
   db 16, 16, 248, 5, 0, 6, 248, 5, 248, 3, 0, 2, 114, 6, 0, 2
   db 248, 3, 248, 2, 0, 1, 114, 10, 0, 1, 248, 2, 248, 1, 0, 1
   db 114, 2, 15, 2, 114, 4, 15, 2, 114, 2, 0, 1, 248, 1, 248, 1
