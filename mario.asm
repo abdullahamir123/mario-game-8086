@@ -122,6 +122,7 @@ resetLevel:
   MOV WORD [cameraX], 0
   MOV BYTE [isOnGround], 0
   MOV WORD [coinsCollected], 0
+  MOV WORD [currentMarioTable], marioTable
 
   ret
 

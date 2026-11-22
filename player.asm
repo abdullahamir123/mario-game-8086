@@ -31,6 +31,7 @@ input:
   JMP .applyHorizontalMove
 
 .accelLeft:
+  MOV WORD [currentMarioTable], marioTableInverted; makes mario drawing turn left when drawn
   ; check if left shift (0x2A) is held to run faster
   MOV CX, 16   ; normal max walk speed (2 px/frame = 16 eighths)
   CMP BYTE [keyDown + 0x2A], 1
@@ -45,6 +46,7 @@ input:
   JMP .applyHorizontalMove
 
 .accelRight:
+  MOV WORD [currentMarioTable], marioTable; makes mario drawing turn right when drawn
   ; check if left shift (0x2A) is held to run faster
   MOV CX, 16  ; normal max walk speed (2 px/frame)
   CMP BYTE [keyDown + 0x2A], 1

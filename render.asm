@@ -19,14 +19,15 @@ drawMario:
   MOV [drawStartX], AX
   MOV AX, [marioWorldY]
   MOV [drawStartY], AX
+  MOV SI, [currentMarioTable] 
   CMP BYTE [isOnGround], 1
   JE .drawMarioGround
-  MOV BX, [marioTable + 6]
+  MOV BX, [SI + 6]
   JMP .done
 .drawMarioGround:
   CMP WORD [marioVelX], 0
   JNE .drawMarioRun
-  MOV BX, [marioTable + 4]
+  MOV BX, [SI + 4]
   JMP .done
 .drawMarioRun:
   INC BYTE [marioRunTimer]
@@ -38,19 +39,16 @@ drawMario:
   XOR BX, BX
   MOV BL, [marioRunIndex]
   SHL BX, 1; mario table is dw
-  MOV BX, [marioTable + BX]
+  MOV BX, [SI + BX]
 .done:
   CALL drawAsset
   ret
 
 drawAsset:
   PUSH AX
-  PUSH BX
   PUSH CX
   PUSH DX
   PUSH SI
-  PUSH DI
-  PUSH BP
 
   ;BX must be at asset to draw
   XOR AX, AX
@@ -109,12 +107,9 @@ drawAsset:
   JMP .readPair
 
 .done:
-  POP BP
-  POP DI
   POP SI
   POP DX
   POP CX
-  POP BX
   POP AX 
   ret
 
