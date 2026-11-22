@@ -165,9 +165,9 @@ input:
   MOV [marioSubX], BX
 
   CMP AX, 0
-  JE NEAR .noHorizontalMove   ; 0 whole pixels to move this frame
-  JL NEAR .tryMoveLeft        ; negative means moving left
-  JMP .tryMoveRight           ; positive means moving right
+  JE NEAR .noHorizontalMove ; 0 whole pixels to move this frame
+  JL NEAR .tryMoveLeft ; negative means moving left
+  JMP .tryMoveRight ; positive means moving right
 
 .tryMoveLeft:
   ; ax is negative (e.g. -1 or -2), turn it into positive step count in cx
@@ -338,7 +338,11 @@ gravity:
   AND BX, 7  ; keep remainder (0 to 7) in sub-pixel accumulator
   MOV [marioSubY], BX
   ADD WORD [marioWorldY], AX  ; move mario up or down by whole pixels
-
+  CMP WORD [marioWorldY], SCREEN_HEIGHT
+  JL .notPitFall
+  CALL resetLevel
+  ret
+.notPitFall:
   ; apply gravity (pull downward by 2 eighths/frame, max fall speed = 48 eighths = 6 px/frame)
   ADD WORD [marioVelY], 2
   CMP WORD [marioVelY], 48
@@ -598,8 +602,9 @@ drawAsset:
   MOV BP, AX; asset width
   ADD BX, 2
   MOV AX, [drawStartY]
+  MOV [assetCurrentY], AX
   MOV CX, SCREEN_WIDTH
-  MUL CX  
+  MUL CX
   ADD AX, [drawStartX]  
   MOV DI, AX; di gets y*screenwidth+x
   MOV AX, [drawStartX]
@@ -622,6 +627,10 @@ drawAsset:
   JL .skipDrawPixel 
   CMP WORD [assetCurrentX], SCREEN_WIDTH;if asset on right, we won't draw those pixels
   JGE .skipDrawPixel
+  CMP WORD [assetCurrentY], HUD_HEIGHT
+  JL .skipDrawPixel
+  CMP WORD [assetCurrentY], SCREEN_HEIGHT
+  JGE .skipDrawPixel
   MOV [ES:DI], AL
 .skipDrawPixel:
   INC DI
@@ -640,6 +649,7 @@ drawAsset:
   XOR SI, SI  ; reset row pixel counter
   MOV AX, [drawStartX]
   MOV [assetCurrentX], AX
+  INC WORD [assetCurrentY]
   JMP .readPair
 
 .done:
@@ -708,7 +718,6 @@ updateCamera:
   MOV WORD [cameraX], AX
   ret
 
-
 displayFrame:
   PUSH DS
   MOV AX, [bufferSegment]
@@ -723,6 +732,35 @@ displayFrame:
 
   POP DS
   RET
+
+resetLevel:
+;wait 1 second
+  MOV CX, 70 ;screens are 70hz in 8086 vga
+  .pauseLoop:
+  CALL screenSync
+  LOOP .pauseLoop
+
+;reset worldMap using initialworldMap
+  PUSH ES
+  MOV AX, DS
+  MOV ES, AX
+  MOV SI, initialworldMap
+  MOV DI, worldMap
+  MOV CX, (MAPCOLUMNS * 12) / 2
+  REP MOVSW
+  POP ES
+;reset all var
+  MOV WORD [marioWorldY], 120
+  MOV WORD [marioWorldX], 20
+  MOV WORD [marioVelX], 0
+  MOV WORD [marioVelY], 0
+  MOV WORD [marioSubX], 0
+  MOV WORD [marioSubY], 0
+  MOV WORD [cameraX], 0
+  MOV BYTE [isOnGround], 0
+  MOV WORD [coinsCollected], 0
+
+  ret
 
 terminate:
   ;return to standard text mode
@@ -751,6 +789,7 @@ cameraX: dw 0
 drawStartX: dw 0
 drawStartY: dw 0
 assetCurrentX: dw 0
+assetCurrentY: dw 0
 
 marioWorldX: dw 20
 marioWorldY: dw 120
@@ -991,19 +1030,6 @@ usedQuestion:
   db 138, 14, 42, 1, 42, 1, 138, 1, 42, 1, 138, 10, 42, 1, 138, 1
   db 42, 1, 42, 1, 138, 14, 42, 1, 42, 16, 249, 249
 
-map:
-  db 60, 12, 77, 33, 68, 9, 77, 18, 77, 60, 77, 33, 56, 9, 77, 18
-  db 77, 14, 68, 3, 77, 10, 68, 1, 77, 32, 77, 14, 56, 3, 77, 10
-  db 56, 1, 77, 32, 77, 16, 56, 1, 77, 9, 56, 6, 77, 6, 68, 1
-  db 77, 12, 68, 1, 77, 8, 77, 10, 56, 4, 77, 2, 56, 1, 77, 14
-  db 56, 2, 77, 3, 68, 1, 77, 13, 68, 1, 42, 1, 77, 8, 77, 7
-  db 56, 2, 116, 1, 56, 1, 77, 5, 56, 1, 77, 4, 56, 1, 116, 1
-  db 56, 2, 77, 7, 56, 2, 77, 2, 56, 1, 116, 1, 56, 1, 116, 1
-  db 77, 9, 68, 1, 42, 2, 77, 8, 77, 4, 68, 1, 77, 11, 56, 1
-  db 77, 5, 68, 1, 77, 3, 68, 1, 77, 1, 68, 1, 77, 13, 68, 5
-  db 77, 1, 68, 1, 42, 3, 77, 8, 77, 16, 56, 1, 77, 7, 56, 1
-  db 77, 23, 42, 4, 77, 8, 120, 39, 77, 3, 120, 18, 114, 39, 77, 3
-  db 114, 18, 249, 249
 ;basically an array of adresses for the assets. index 0 means draw nthn (sky) everything else points to an asset
 
 tileTable:
