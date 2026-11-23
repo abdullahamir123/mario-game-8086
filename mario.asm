@@ -92,7 +92,7 @@ keyHandler:
   XOR AH, AH
   IN AL, 0x60;keybaord interrupt key
   ;in from port 60 gives us keycode in first 0 to 6 bits and 1 or 0 in last bit depending if pressed or released
-  TEST AL, 0x80 ;(1000 0000). checking if 7th bit on(if pressed or not)
+  TEST AL, 10000000b ;checking if 7th bit on(if pressed or not)
   JZ .pressed
   AND AL, 0X7F; (0111 1111 clearing last bit)
   XOR CX, CX
@@ -100,6 +100,16 @@ keyHandler:
   MOV BX, AX
   MOV BYTE [CS:keyDown+ BX], CL; if not pressed cl will be 0. if pressed cl is 1
 .done:
+;ran into an issue. when we press enter on to run a program, the enter was pressed before program execution
+;but released afterwards. this cause an issue where irq1 (keybaord interrupt request line) gets blocked as it.
+;to reset such an issue, we must turn port 0x61 bit 7 on and off.
+;odd that it only happened now and not before. unsure about the reason
+  IN AL, 0x61
+  OR AL, 10000000b; turn bit 7 on
+  OUT 0x61, AL ; send back bit 7 as 1
+  AND AL, 01111111b; turn bit 7 off
+  OUT 0x61, AL ; send back bit 7 as 0
+  
   MOV AL, 0x20 ; moving 0x20 into al and then feeding to PIC tells it interrupt has finished. and code can continue now
   OUT 0x20, AL;port 20 is interrupt controller
   POP CX
