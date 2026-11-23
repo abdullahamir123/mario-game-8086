@@ -1,7 +1,7 @@
 %define SCREEN_WIDTH  320
 %define SCREEN_HEIGHT 200
 
-%define MAPCOLUMNS 60
+%define MAPCOLUMNS 160
 %define SCREENCOLUMNS 20
 %define SCREENROWS 12
 
@@ -74,7 +74,7 @@ gameLoop:
   CALL HUD
   CALL sky
   CALL drawMap
-  CALL drawMario  
+  CALL drawMario
   CALL screenSync
   CALL displayFrame
   JMP gameLoop
@@ -109,7 +109,7 @@ keyHandler:
   OUT 0x61, AL ; send back bit 7 as 1
   AND AL, 01111111b; turn bit 7 off
   OUT 0x61, AL ; send back bit 7 as 0
-  
+
   MOV AL, 0x20 ; moving 0x20 into al and then feeding to PIC tells it interrupt has finished. and code can continue now
   OUT 0x20, AL;port 20 is interrupt controller
   POP CX

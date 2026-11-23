@@ -252,7 +252,7 @@ updateCamera:
   JL .reset
   CMP AX, (MAPCOLUMNS*16)-SCREEN_WIDTH
   JLE .done
-  MOV AX, 640
+  MOV AX, (MAPCOLUMNS*16 ) - SCREEN_WIDTH
   JMP .done
 .reset:
   XOR AX, AX
