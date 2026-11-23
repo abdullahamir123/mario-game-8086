@@ -33,6 +33,17 @@ START:
   MOV AX, 0013H
   INT 10H
 
+
+;AH 11h has character generator fucntions
+;AL 30h specifies get font unformation
+;it returns a pointer to alpahabet table. segment in ES and offset in BP
+;BH 03h specifies we want 8x8 font size
+  MOV AX, 1130H
+  MOV BH, 03H
+  INT 10H
+  MOV [fontSegment], ES
+  MOV [fontOffset], BP
+
   ;int 16h and int 21h is usually used with AH 0x00 or 0x01 for keybaord interrupts.
   ;but it only allows one input at a time make jumping while running impossible.
   ;hence we have to make our own keyboard interrupt handler
@@ -122,6 +133,7 @@ resetLevel:
   MOV WORD [cameraX], 0
   MOV BYTE [isOnGround], 0
   MOV WORD [coinsCollected], 0
+  MOV WORD [currentMarioTable], marioTable
 
   ret
 
