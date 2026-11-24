@@ -9,7 +9,7 @@ HUD:; drawing the top bar for score at end
   CALL drawString
  
   MOV AX, [coinsCollected]
-  CALL drawNumber
+  CALL drawNumber16
   
   MOV DI, 250 
   MOV SI, livesText 
@@ -17,7 +17,7 @@ HUD:; drawing the top bar for score at end
   
   MOV AL, [lives]
   XOR AH, AH
-  CALL drawNumber
+  CALL drawNumber16
   ret
 
 sky:
@@ -104,7 +104,7 @@ pauseMenu:
   RET
 
 
-; black screen with "GAME OVER", holds for ~1.5 seconds, then resets the level
+; black screen with "GAME OVER", holds for 1.5 seconds, then resets the level
 deathScreen:
   ;clear buffer to black
   MOV AX, [bufferSegment]
@@ -174,21 +174,35 @@ drawChar:
   POP DS
   RET
 
+; assems AX has number and DI has position
+drawNumber16:
+  PUSH BX
+  PUSH CX
+  PUSH DX
 
-; draws a 2 digit number from AX at current DI
-drawNumber:
-  MOV BL, 10
-;when using 8 bit division, asnwer goes to al and remainder in ah.
-  DIV BL ; dividing by 12 gets us each digit seperated into AL and AH
-  
-  ADD AL, '0' ; convert tens to ASCII
-  PUSH AX ; saves tens
+  MOV BX, 10
+  XOR CX, CX; digit counter
+
+;pushes the charcters from right to left
+.pushLoop:
+  XOR DX, DX 
+  DIV BX ; AX has quotient and DX has remainder
+  ADD DL, '0'
+  PUSH DX 
+  INC CX
+  CMP AX, 0
+  JNE .pushLoop
+;gets back charcter from left to right and prints them
+.popLoop:
+  POP AX 
+  PUSH CX 
   CALL drawChar
-  POP AX
-  
-  MOV AL, AH
-  ADD AL, '0' ; convert ones to ASCII
-  CALL drawChar
+  POP CX
+  LOOP .popLoop
+
+  POP DX
+  POP CX
+  POP BX
   RET
 
 drawString2x:
@@ -242,5 +256,56 @@ drawChar2x:
   ADD DI, 16; advance DI by 16 pixels for the next 2x letter
   POP SI
   POP DS
+  RET
+
+winScreen:
+  ; 1. clear backbuffer to black
+  MOV AX, [bufferSegment]
+  MOV ES, AX
+  XOR DI, DI
+  XOR AX, AX
+  MOV CX, 32000
+  REP STOSW
+
+  ; 2. draw big 16x16 "YOU WIN!" (8 chars * 16px = 128px, X=96, Y=45)
+  MOV DI, (45 * SCREEN_WIDTH) + 96
+  MOV SI, winText
+  CALL drawString2x
+
+  ; 3. draw "SCORE: " + multi-digit [score] (X=116, Y=95)
+  MOV DI, (95 * SCREEN_WIDTH) + 116
+  MOV SI, scoreText
+  CALL drawString
+  MOV AX, [score]
+  CALL drawNumber16
+
+  ; 4. draw options: "PRESS ENTER TO REPLAY" and "PRESS ESC TO EXIT"
+  MOV DI, (135 * SCREEN_WIDTH) + 76
+  MOV SI, replayText
+  CALL drawString
+
+  MOV DI, (155 * SCREEN_WIDTH) + 92
+  MOV SI, exitText
+  CALL drawString
+
+  CALL screenSync
+  CALL displayFrame
+
+  ; 6. wait for ESC (0x01) or ENTER (0x1C)
+.waitLoop:
+  CMP BYTE [keyDown + 0x01], 1
+  JNE .checkEnter
+  JMP terminate ; JMP instead of JE so distance never overflows 127 bytes!
+.checkEnter:
+  CMP BYTE [keyDown + 0x1C], 1
+  JNE .waitLoop
+
+  ; debounce Enter release before restarting
+.waitRelease:
+  CMP BYTE [keyDown + 0x1C], 0
+  JNE .waitRelease
+  
+  CALL resetLevel
+
   RET
 

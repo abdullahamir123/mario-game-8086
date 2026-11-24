@@ -7,6 +7,8 @@
 
 %define HUD_HEIGHT 8
 
+%define MAX_ENEMIES 6
+
 
 [ORG 0x100]
 
@@ -63,6 +65,8 @@ START:
   INT 0x21
 
   CALL startScreen
+  CALL resetEnemies
+
 gameLoop:
   ;always ensure ES points to the backbuffer before drawing
   MOV AX, [bufferSegment]
@@ -71,10 +75,15 @@ gameLoop:
   CALL input
   CALL gravity
   CALL checkCoins
+  CALL checkFlag
+  CALL updateEnemies
+  CALL checkEnemiesCollision
+  CALL checkShellCollisions
   CALL updateCamera
   CALL HUD
   CALL sky
   CALL drawMap
+  CALL drawEnemies
   CALL drawMario
   CALL screenSync
   CALL displayFrame
@@ -120,12 +129,15 @@ keyHandler:
 
 resetLevel:
   DEC BYTE [lives]
+  JZ .dead
+  JMP .alive
+.dead:
+  MOV BYTE [lives], 3
   CALL deathScreen
+.alive:
 ;wait 1 second
   MOV CX, 70 ;screens are 70hz in 8086 vga
-  .pauseLoop:
-  CALL screenSync
-  LOOP .pauseLoop
+  call screenPause
 
 ;reset worldMap using initialworldMap
   PUSH ES
@@ -147,6 +159,7 @@ resetLevel:
   MOV BYTE [isOnGround], 0
   MOV WORD [coinsCollected], 0
   MOV WORD [currentMarioTable], marioTable
+  CALL resetEnemies
 
   ret
 
@@ -176,4 +189,5 @@ terminate:
 %include "mario/ui.asm"
 %include "mario/render.asm"
 %include "mario/player.asm"
+%include "mario/enemies.asm"
 %include "mario/data.asm"

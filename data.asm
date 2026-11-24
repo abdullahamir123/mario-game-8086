@@ -27,6 +27,7 @@ marioRunTimer: db 0;used to time the swap between the 2 mario run animations
 
 coinsCollected: dw 0
 lives: db 3
+score: dw 0
 
 coinText: db "COINS: ", 0
 livesText: db "LIVES:", 0
@@ -34,6 +35,24 @@ titleText: db "SUPER MARIO", 0
 startText: db "PRESS ENTER TO START", 0
 pausedText:   db "PAUSED", 0
 gameOverText: db "GAME OVER", 0
+winText:    db "YOU WIN!", 0
+scoreText:  db "SCORE: ", 0
+replayText: db "PRESS ENTER TO REPLAY", 0
+exitText:   db "PRESS ESC TO EXIT", 0
+
+; states are 0 = dead, 1 = walking, 2 = squished Goomba  idle shell, 3 = sliding shell, 4 = goomba squished
+enemyState: times MAX_ENEMIES db 0
+enemyType:  times MAX_ENEMIES db 0    ; 0 = goomba, 1 = koopa
+enemyTimer: times MAX_ENEMIES db 0
+enemyX:     times MAX_ENEMIES dw 0
+enemyY:     times MAX_ENEMIES dw 0
+enemyVelX:  times MAX_ENEMIES dw 0
+
+initialEnemyState: db 1, 1, 1, 1, 1, 1
+initialEnemyType:  db 0, 0, 1, 0, 1, 0
+initialEnemyX:     dw 240, 448, 832, 1600, 1728, 2128
+initialEnemyY:     dw 152, 152, 152, 152, 152, 152
+initialEnemyVelX:  dw -1, 1, -1, -1, 1, -1
 
 keyDown: times 128 db 0
 oldInterrupt9Segment: dw 0
@@ -452,7 +471,7 @@ worldMap:
   db 0,0,0,0,0,0,0,3,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,6,0,0,0,0,0,12,0,0,0,0,0,0,0,0
   ; Row 5
   db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,3,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,3,0,0,0
-  db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,3,3,3,3,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+  db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,3,3,3,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
   db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
   db 0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6,6,0,0,0,0,0,12,0,0,0,0,0,0,0,0
   ; Row 6
@@ -514,7 +533,7 @@ initialworldMap:
   db 0,0,0,0,0,0,0,3,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,6,0,0,0,0,0,12,0,0,0,0,0,0,0,0
   ; Row 5
   db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,3,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,3,0,0,0
-  db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,3,3,3,3,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+  db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,3,3,3,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
   db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
   db 0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6,6,0,0,0,0,0,12,0,0,0,0,0,0,0,0
   ; Row 6
