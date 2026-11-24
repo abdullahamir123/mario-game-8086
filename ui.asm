@@ -288,7 +288,6 @@ winScreen:
   MOV SI, exitText
   CALL drawString
 
-  ; 5. blit to screen
   CALL screenSync
   CALL displayFrame
 
@@ -296,7 +295,7 @@ winScreen:
 .waitLoop:
   CMP BYTE [keyDown + 0x01], 1
   JNE .checkEnter
-  JMP terminate               ; JMP instead of JE so distance never overflows 127 bytes!
+  JMP terminate ; JMP instead of JE so distance never overflows 127 bytes!
 .checkEnter:
   CMP BYTE [keyDown + 0x1C], 1
   JNE .waitLoop
@@ -305,29 +304,8 @@ winScreen:
 .waitRelease:
   CMP BYTE [keyDown + 0x1C], 0
   JNE .waitRelease
+  
+  CALL resetLevel
 
-  ; 7. full game reset (without triggering deathScreen!)
-  MOV BYTE [lives], 3
-  MOV WORD [coinsCollected], 0
-  MOV WORD [score], 0
-  MOV WORD [marioWorldX], 20
-  MOV WORD [marioWorldY], 120
-  MOV WORD [marioVelX], 0
-  MOV WORD [marioSubX], 0
-  MOV WORD [marioVelY], 0
-  MOV WORD [marioSubY], 0
-  MOV BYTE [isOnGround], 1
-  MOV WORD [cameraX], 0
-  MOV WORD [currentMarioTable], marioTable
-
-  ; restore worldMap from initialworldMap
-  PUSH ES
-  MOV AX, DS
-  MOV ES, AX
-  MOV SI, initialworldMap
-  MOV DI, worldMap
-  MOV CX, (MAPCOLUMNS * 12) / 2
-  REP MOVSW
-  POP ES
   RET
 

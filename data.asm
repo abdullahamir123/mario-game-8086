@@ -40,6 +40,20 @@ scoreText:  db "SCORE: ", 0
 replayText: db "PRESS ENTER TO REPLAY", 0
 exitText:   db "PRESS ESC TO EXIT", 0
 
+; states are 0 = dead, 1 = walking, 2 = squished Goomba  idle shell, 3 = sliding shell, 4 = goomba squished
+enemyState: times MAX_ENEMIES db 0
+enemyType:  times MAX_ENEMIES db 0    ; 0 = goomba, 1 = koopa
+enemyTimer: times MAX_ENEMIES db 0
+enemyX:     times MAX_ENEMIES dw 0
+enemyY:     times MAX_ENEMIES dw 0
+enemyVelX:  times MAX_ENEMIES dw 0
+
+initialEnemyState: db 1, 1, 1, 1, 1, 1
+initialEnemyType:  db 0, 0, 1, 0, 1, 0
+initialEnemyX:     dw 240, 448, 832, 1600, 1728, 2128
+initialEnemyY:     dw 152, 152, 152, 152, 152, 152
+initialEnemyVelX:  dw -1, 1, -1, -1, 1, -1
+
 keyDown: times 128 db 0
 oldInterrupt9Segment: dw 0
 oldInterrupt9Offset: dw 0
