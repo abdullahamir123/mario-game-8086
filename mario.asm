@@ -69,6 +69,7 @@ gameLoop:
   MOV ES, AX
 
   CALL input
+  CALL checkFlag
   CALL gravity
   CALL checkCoins
   CALL updateCamera
@@ -120,12 +121,15 @@ keyHandler:
 
 resetLevel:
   DEC BYTE [lives]
+  JZ .dead
+  JMP .alive
+.dead:
+  MOV BYTE [lives], 3
   CALL deathScreen
+.alive:
 ;wait 1 second
   MOV CX, 70 ;screens are 70hz in 8086 vga
-  .pauseLoop:
-  CALL screenSync
-  LOOP .pauseLoop
+  call screenPause
 
 ;reset worldMap using initialworldMap
   PUSH ES

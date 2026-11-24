@@ -30,6 +30,9 @@ drawMario:
   ret
 
 drawAsset:
+  PUSH BX
+  PUSH DI
+  PUSH BP
   PUSH AX
   PUSH CX
   PUSH DX
@@ -96,6 +99,9 @@ drawAsset:
   POP DX
   POP CX
   POP AX 
+  POP BP
+  POP DI
+  POP BX
   ret
 
 drawMap:
@@ -167,7 +173,7 @@ updateCamera:
   JL .reset
   CMP AX, (MAPCOLUMNS*16)-SCREEN_WIDTH
   JLE .done
-  MOV AX, 640
+  MOV AX, (MAPCOLUMNS*16)-SCREEN_WIDTH
   JMP .done
 .reset:
   XOR AX, AX
@@ -252,5 +258,56 @@ tryCollectCoin:
   JNE .notCoin
   MOV BYTE [worldMap + SI], 0
   INC WORD [coinsCollected]
+  ADD WORD [score], 50
 .notCoin:
   RET
+
+checkFlag:
+  MOV AX, [marioWorldX]
+  ADD AX, [marioWidth]
+  CMP AX, 151*16 ;flag is on 151th column
+  JL .done
+  MOV BX, [marioWorldY]
+  MOV AX, SCREEN_HEIGHT
+  SUB AX, BX
+  MOV BX, 10
+  MUL BX
+  MOV [score], AX 
+  MOV WORD [currentMarioTable], marioTable ;change mario animation to rightwards just incase
+  CALL drawAnimation
+  MOV CX, 70
+  CALL screenPause
+  CALL gameEndAnimation
+.done:
+  ret
+
+gameEndAnimation:
+  ADD WORD [marioWorldY], 2
+  CALL drawAnimation
+  CMP WORD [marioWorldY], 152 ;ground at 152
+  JL gameEndAnimation
+  MOV BYTE [isOnGround], 1
+  MOV WORD [marioVelX], 8
+.moveToCastle:
+  ADD WORD [marioWorldX], 2
+  CALL drawAnimation
+  CMP WORD [marioWorldX], (156*16)+8
+  JL .moveToCastle
+  CALL winScreen
+  ret
+
+drawAnimation:
+  MOV AX, [bufferSegment]
+  MOV ES, AX
+  CALL updateCamera
+  CALL HUD
+  CALL sky
+  CALL drawMap
+  CALL drawMario
+  CALL screenSync
+  CALL displayFrame
+  ret
+
+screenPause:
+  CALL screenSync
+  LOOP screenPause
