@@ -9,6 +9,13 @@ input:
   ;Spacebar: 0x39
   ;Up Arrow: 0x48
   ; check if player is pressing left (a or left arrow)
+  ; 0x19 is scancode for 'P'
+
+  CMP BYTE [keyDown + 0x19], 1   
+  JNE .notPaused
+  CALL pauseMenu
+
+.notPaused:
   CMP BYTE [keyDown + 0x1E], 1
   JE .accelLeft
   CMP BYTE [keyDown + 0x4B], 1

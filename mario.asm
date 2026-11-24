@@ -62,6 +62,7 @@ START:
   MOV AX, 0x2509
   INT 0x21
 
+  CALL startScreen
 gameLoop:
   ;always ensure ES points to the backbuffer before drawing
   MOV AX, [bufferSegment]
@@ -118,6 +119,8 @@ keyHandler:
   IRET; need to used iret instead of ret for interrupts
 
 resetLevel:
+  DEC BYTE [lives]
+  CALL deathScreen
 ;wait 1 second
   MOV CX, 70 ;screens are 70hz in 8086 vga
   .pauseLoop:
@@ -170,6 +173,7 @@ terminate:
   MOV AX, 4C00H
   INT 21H
 
+%include "mario/ui.asm"
 %include "mario/render.asm"
 %include "mario/player.asm"
 %include "mario/data.asm"

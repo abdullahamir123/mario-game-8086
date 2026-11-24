@@ -26,8 +26,14 @@ marioRunIndex: db 0
 marioRunTimer: db 0;used to time the swap between the 2 mario run animations
 
 coinsCollected: dw 0
+lives: db 3
 
 coinText: db "COINS: ", 0
+livesText: db "LIVES:", 0
+titleText: db "SUPER MARIO", 0
+startText: db "PRESS ENTER TO START", 0
+pausedText:   db "PAUSED", 0
+gameOverText: db "GAME OVER", 0
 
 keyDown: times 128 db 0
 oldInterrupt9Segment: dw 0
