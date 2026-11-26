@@ -130,6 +130,10 @@ moveEnemyX:
 
 ; checks if mario overlaps any active enemy using 16x16 box collision
 checkEnemiesCollision:
+  CMP BYTE [invulnerabilityTimer], 0
+  JE .startCollisionLoop
+  DEC BYTE [invulnerabilityTimer]
+.startCollisionLoop:
   XOR SI, SI
   XOR DI, DI
   MOV CX, MAX_ENEMIES
@@ -222,6 +226,14 @@ onMarioHitEnemy:
   CMP BYTE [enemyTimer + SI], 0
   JG .survived
 .hurtMario:
+   CMP BYTE [invulnerabilityTimer], 0
+  JG .survived 
+  CMP WORD [superMario], 0 
+  JE .marioDied
+  MOV WORD [superMario], 0 
+  MOV BYTE [invulnerabilityTimer], 90
+  JMP .survived
+.marioDied:
   CALL resetLevel ; lose a life
   MOV AL, 1
   RET

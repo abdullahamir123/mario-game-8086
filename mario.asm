@@ -74,7 +74,7 @@ gameLoop:
 
   CALL input
   CALL gravity
-  CALL checkCoins
+  CALL checkItem
   CALL checkFlag
   CALL updateEnemies
   CALL checkEnemiesCollision
@@ -129,10 +129,12 @@ keyHandler:
 
 resetLevel:
   DEC BYTE [lives]
+  MOV WORD [score], 0
   JZ .dead
   JMP .alive
 .dead:
   MOV BYTE [lives], 3
+  MOV BYTE [superMario], 0
   CALL deathScreen
 .alive:
 ;wait 1 second
