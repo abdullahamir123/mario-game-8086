@@ -100,9 +100,11 @@ input:
   MOV AX, 8
 .topLeftStepOk:
   CALL getTile
-  CMP AL, 0
+  CMP AL, 0;coin
   JE .checkBottomLeftStep
-  CMP AL, 5
+  CMP AL, 5;sky
+  JE .checkBottomLeftStep
+  CMP AL, 17;mushroom
   JE .checkBottomLeftStep
   JMP .hitLeftWall
 
@@ -122,6 +124,8 @@ input:
   CMP AL, 0
   JE .stepLeftOne
   CMP AL, 5
+  JE .stepLeftOne
+  CMP AL, 17
   JE .stepLeftOne
   JMP .hitLeftWall
 
@@ -165,6 +169,8 @@ input:
   JE .checkBottomRightStep
   CMP AL, 5
   JE .checkBottomRightStep
+  CMP AL, 17
+  JE .checkBottomRightStep
   JMP .hitRightWall
 
 .checkBottomRightStep:
@@ -184,6 +190,8 @@ input:
   CMP AL, 0
   JE .stepRightOne
   CMP AL, 5
+  JE .stepRightOne
+  CMP AL, 17
   JE .stepRightOne
   JMP .hitRightWall
 
@@ -283,6 +291,8 @@ gravity:
   JE .checkRightHead
   CMP AL, 5; 5 is coin so keep going up
   JE .checkRightHead
+  CMP AL, 17
+  JE .checkRightHead
   JMP .hitHead ; solid block above left side of head
 
 .checkRightHead:
@@ -296,6 +306,8 @@ gravity:
   JE .clearTile
   CMP AL, 5 ; coin is clear
   JE .clearTile
+  CMP AL, 17
+  JE .clearTile
   JMP .blocked
 
 .clearTile:
@@ -308,7 +320,13 @@ gravity:
   CMP AL, 4; check if the block he bonked is question block
   JNE .notQuestionBlock
   MOV BYTE [worldMap + SI], 7; turn questionblock into usedquestion
+  CALL randomNum
+  CMP AL, 0 ;we get back 0 to 3 between in AL using the randcom func we want 25 percent chance so we check if 0
+  JE .mushroom
   MOV BYTE [worldMap + SI - MAPCOLUMNS], 5
+  JMP .notQuestionBlock
+.mushroom:
+  MOV BYTE [worldMap + SI - MAPCOLUMNS], 17
 
 .notQuestionBlock:
   MOV AX, [marioWorldY]
@@ -334,6 +352,8 @@ gravity:
   JZ .checkRightFoot
   CMP AL, 5; check if coin
   JE .checkRightFoot
+  CMP AL, 17
+  JE .checkRightFoot
   JMP .onGround
 .checkRightFoot:
   ;now check right foot
@@ -344,8 +364,10 @@ gravity:
   SUB BX, 3 ; -1 for right edge, -2 for border inset
   CALL getTile; gives back a tile in AL (marios right most bottom pixel)
   CMP AL, 0; if sky we fall
-  JZ .inAir
+  JE .inAir
   CMP AL, 5; check if coin
+  JE .inAir
+  CMP AL, 17
   JE .inAir
 
 .onGround:
@@ -366,3 +388,10 @@ gravity:
 .inAir:
   MOV BYTE [isOnGround], 0
   RET
+
+randomNum:
+  XOR AX, AX
+  INT 1AH
+  MOV AL, DL
+  AND AL, 00000011B
+  ret

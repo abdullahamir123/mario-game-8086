@@ -1,18 +1,23 @@
 drawMario:
+  TEST BYTE [invulnerabilityTimer], 4 ; no draw every 4 frames while bigger than 0
+  JZ .draw
+  RET
+.draw:
   MOV AX, [marioWorldX]
   SUB AX, [cameraX]
   MOV [drawStartX], AX
   MOV AX, [marioWorldY]
   MOV [drawStartY], AX
   MOV SI, [currentMarioTable] 
+  MOV BX, [superMario]
   CMP BYTE [isOnGround], 1
   JE .drawMarioGround
-  MOV BX, [SI + 6]
+  MOV BX, [SI + BX +6]
   JMP .done
 .drawMarioGround:
   CMP WORD [marioVelX], 0
   JNE .drawMarioRun
-  MOV BX, [SI + 4]
+  MOV BX, [SI + BX + 4]
   JMP .done
 .drawMarioRun:
   INC BYTE [marioRunTimer]
@@ -23,7 +28,8 @@ drawMario:
 .noSwap:
   XOR BX, BX
   MOV BL, [marioRunIndex]
-  SHL BX, 1; mario table is dw
+  SHL BX, 1 
+  ADD BX, [superMario] ; 0 for normal, 8 for super mario
   MOV BX, [SI + BX]
 .done:
   CALL drawAsset
@@ -49,6 +55,47 @@ drawAsset:
   MUL CX
   ADD AX, [drawStartX]  
   MOV DI, AX; di gets y*screenwidth+x
+
+  MOV AX, [drawStartX]
+  CMP AX, 0
+  JL .needsClip
+  ADD AX, BP
+  CMP AX, SCREEN_WIDTH
+  JG .needsClip
+  XOR DX, DX
+  MOV DL, [BX-1] ;height
+  MOV AX, [drawStartY]
+  CMP AX, HUD_HEIGHT
+  JL .needsClip
+  ADD AX, DX
+  CMP AX, SCREEN_HEIGHT
+  JG .needsClip
+
+  XOR SI, SI
+.fastReadPair:
+  MOV AL, [BX] ;color
+  CMP AL, 249
+  JNE .notDone
+  JMP .done
+.notDone
+  XOR CX, CX
+  MOV CL, [BX+1];count
+  ADD BX, 2;go to next pair
+  ADD SI, CX
+  CMP AL, 248
+  JE .fastSkip
+  REP STOSB   ; draws CX pixels of color AL and adds CX to DI
+  JMP .fastCheckRow
+.fastSkip:
+  ADD DI, CX
+.fastCheckRow:
+  CMP SI, BP
+  JL .fastReadPair
+  ADD DI, SCREEN_WIDTH
+  SUB DI, BP
+  XOR SI, SI
+  JMP .fastReadPair
+.needsClip:
   MOV AX, [drawStartX]
   MOV [assetCurrentX], AX
 
@@ -217,14 +264,14 @@ getTile:
 .validTile:
   ret
 
-checkCoins:
-;checks four corner pixels (from inside) of mario there is a coin.
+checkItem:
+;checks four corner pixels (from inside) of mario there is a coin or mushroom
   ; topleft
   MOV BX, [marioWorldX]
   ADD BX, 2
   MOV AX, [marioWorldY]
   ADD AX, 2
-  CALL tryCollectCoin
+  CALL tryCollect
 
   ;topright
   MOV BX, [marioWorldX]
@@ -232,7 +279,7 @@ checkCoins:
   SUB BX, 3
   MOV AX, [marioWorldY]
   ADD AX, 2
-  CALL tryCollectCoin
+  CALL tryCollect
 
   ;bottomleft
   MOV BX, [marioWorldX]
@@ -240,7 +287,7 @@ checkCoins:
   MOV AX, [marioWorldY]
   ADD AX, [marioHeight]
   DEC AX
-  CALL tryCollectCoin
+  CALL tryCollect
 
   ;bottomright
   MOV BX, [marioWorldX]
@@ -249,17 +296,26 @@ checkCoins:
   MOV AX, [marioWorldY]
   ADD AX, [marioHeight]
   DEC AX
-  CALL tryCollectCoin
+  CALL tryCollect
   RET
 
-tryCollectCoin:
+tryCollect:
   CALL getTile
+  TEST AL, AL
+  JZ .notItem
   CMP AL, 5
-  JNE .notCoin
+  JNE .checkMushroom
   MOV BYTE [worldMap + SI], 0
   INC WORD [coinsCollected]
   ADD WORD [score], 50
-.notCoin:
+  RET
+.checkMushroom:
+  CMP AL, 17
+  JNE .notItem
+  MOV BYTE [worldMap + SI], 0
+  MOV BYTE [superMario], 8
+  ADD WORD [score], 100   
+.notItem:
   RET
 
 checkFlag:
@@ -272,7 +328,7 @@ checkFlag:
   SUB AX, BX
   MOV BX, 10
   MUL BX
-  MOV [score], AX 
+  ADD [score], AX 
   MOV WORD [currentMarioTable], marioTable ;change mario animation to rightwards just incase
   CALL drawAnimation
   MOV CX, 70

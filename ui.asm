@@ -10,6 +10,14 @@ HUD:; drawing the top bar for score at end
  
   MOV AX, [coinsCollected]
   CALL drawNumber16
+
+  MOV DI, 100
+  MOV SI, scoreText
+  CALL drawString
+
+  MOV AX, [score]
+  CALL drawNumber16
+
   
   MOV DI, 250 
   MOV SI, livesText 
