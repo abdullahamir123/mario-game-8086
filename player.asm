@@ -11,7 +11,7 @@ input:
   ; check if player is pressing left (a or left arrow)
   ; 0x19 is scancode for 'P'
 
-  CMP BYTE [keyDown + 0x19], 1   
+  CMP BYTE [keyDown + 0x19], 1
   JNE .notPaused
   CALL pauseMenu
 
@@ -39,31 +39,18 @@ input:
 
 .accelLeft:
   MOV WORD [currentMarioTable], marioTableInverted; makes mario drawing turn left when drawn
-  ; check if left shift (0x2A) is held to run faster
-  MOV CX, 16   ; normal max walk speed (2 px/frame = 16 eighths)
-  CMP BYTE [keyDown + 0x2A], 1
-  JNE .applyAccelLeft
-  MOV CX, 24 ; max run speed when holding shift (3 px/frame = 24 eighths)
-.applyAccelLeft:
-  NEG CX  ; make speed limit negative for moving left
   DEC WORD [marioVelX]
-  CMP WORD [marioVelX], CX
+  CMP WORD [marioVelX], -16 ; max walk speed (2 px/frame = -16 eighths)
   JGE .applyHorizontalMove
-  MOV [marioVelX], CX
+  MOV WORD [marioVelX], -16
   JMP .applyHorizontalMove
 
 .accelRight:
   MOV WORD [currentMarioTable], marioTable; makes mario drawing turn right when drawn
-  ; check if left shift (0x2A) is held to run faster
-  MOV CX, 16  ; normal max walk speed (2 px/frame)
-  CMP BYTE [keyDown + 0x2A], 1
-  JNE .applyAccelRight
-  MOV CX, 24  ; max run speed when holding shift (3 px/frame)
-.applyAccelRight:
   INC WORD [marioVelX]
-  CMP WORD [marioVelX], CX
+  CMP WORD [marioVelX], 16 ; max walk speed (2 px/frame = 16 eighths)
   JLE .applyHorizontalMove
-  MOV [marioVelX], CX
+  MOV WORD [marioVelX], 16
 
 .applyHorizontalMove:
   ; convert eighth-pixel velocity into whole pixels to move this frame
@@ -92,7 +79,7 @@ input:
   ; check top-left corner 1 pixel ahead
   MOV BX, [marioWorldX]
   DEC BX
-  ADD BX, 2                   ; 2 px sprite border inset
+  ADD BX, 2   ; 2 px sprite border inset
   MOV AX, [marioWorldY]
   ADD AX, 2
   CMP AX, 8
@@ -220,7 +207,7 @@ input:
   JMP .noJump
 .jump:
   CMP BYTE [jumpWasDown], 1
-  JE .noJump  
+  JE .noJump
   MOV BYTE [jumpWasDown], 1 ; prevents holding jump in air too
 
   CMP BYTE [isOnGround], 1
