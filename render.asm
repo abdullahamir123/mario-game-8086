@@ -308,13 +308,21 @@ tryCollect:
   MOV BYTE [worldMap + SI], 0
   INC WORD [coinsCollected]
   ADD WORD [score], 50
+  PUSH SI
+  MOV SI, sfxCoin
+  CALL playSound
+  POP SI
   RET
 .checkMushroom:
   CMP AL, 17
   JNE .notItem
   MOV BYTE [worldMap + SI], 0
   MOV BYTE [superMario], 8
-  ADD WORD [score], 100   
+  ADD WORD [score], 100
+  PUSH SI
+  MOV SI, sfxPowerup
+  CALL playSound
+  POP SI
 .notItem:
   RET
 
@@ -323,6 +331,10 @@ checkFlag:
   ADD AX, [marioWidth]
   CMP AX, 151*16 ;flag is on 151th column
   JL .done
+  PUSH SI
+  MOV SI, sfxWin
+  CALL playSound
+  POP SI
   MOV BX, [marioWorldY]
   MOV AX, SCREEN_HEIGHT
   SUB AX, BX
@@ -362,8 +374,11 @@ drawAnimation:
   CALL drawMario
   CALL screenSync
   CALL displayFrame
+  CALL updateSound
   ret
 
 screenPause:
   CALL screenSync
+  CALL updateSound
   LOOP screenPause
+  RETtr

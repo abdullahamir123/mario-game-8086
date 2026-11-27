@@ -209,6 +209,10 @@ onMarioHitEnemy:
   MOV WORD [marioVelY], -32
   MOV BYTE [isOnGround], 0
   ADD WORD [score], 100
+  PUSH SI
+  MOV SI, sfxStomp
+  CALL playSound
+  POP SI
 
   CMP BYTE [enemyType + SI], 0
   JNE .stompKoopa
@@ -226,12 +230,16 @@ onMarioHitEnemy:
   CMP BYTE [enemyTimer + SI], 0
   JG .survived
 .hurtMario:
-   CMP BYTE [invulnerabilityTimer], 0
+  CMP BYTE [invulnerabilityTimer], 0
   JG .survived 
   CMP WORD [superMario], 0 
   JE .marioDied
   MOV WORD [superMario], 0 
   MOV BYTE [invulnerabilityTimer], 90
+  PUSH SI
+  MOV SI, sfxBump
+  CALL playSound
+  POP SI
   JMP .survived
 .marioDied:
   CALL resetLevel ; lose a life

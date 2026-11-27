@@ -87,6 +87,7 @@ gameLoop:
   CALL drawMario
   CALL screenSync
   CALL displayFrame
+  CALL updateSound
   JMP gameLoop
 
 ; keyhandler is not called by us it is called whenever a key is pressed
@@ -128,6 +129,16 @@ keyHandler:
   IRET; need to used iret instead of ret for interrupts
 
 resetLevel:
+  PUSH SI
+  MOV SI, sfxDie
+  CALL playSound
+  POP SI
+  MOV CX, 26              ; let the full 4-note death melody finish (~0.37 sec)
+  CALL screenPause
+  MOV WORD [sfxPtr], 0
+  MOV BYTE [sfxTimer], 0
+  CALL speakerOff
+
   DEC BYTE [lives]
   MOV WORD [score], 0
   JZ .dead
@@ -166,6 +177,7 @@ resetLevel:
   ret
 
 terminate:
+  CALL speakerOff
   ;return to standard text mode
   MOV AX, 0003H
   INT 10H
@@ -189,6 +201,7 @@ terminate:
   INT 21H
 
 %include "mario/ui.asm"
+%include "mario/sound.asm"
 %include "mario/render.asm"
 %include "mario/player.asm"
 %include "mario/enemies.asm"
