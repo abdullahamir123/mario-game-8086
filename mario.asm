@@ -201,9 +201,9 @@ terminate:
   MOV AX, 4C00H
   INT 21H
 
-%include "ui.asm"
-%include "sound.asm"
-%include "render.asm"
-%include "player.asm"
-%include "enemies.asm"
-%include "data.asm"
+%include "mario\ui.asm"
+%include "mario\sound.asm"
+%include "mario\render.asm"
+%include "mario\player.asm"
+%include "mario\enemies.asm"
+%include "mario\data.asm"
