@@ -48,6 +48,8 @@ scoreText:  db "SCORE: ", 0
 replayText: db "PRESS ENTER TO REPLAY", 0
 exitText:   db "PRESS ESC TO EXIT", 0
 
+nameText: db"ABDULLAH,HOORIA,RAMEEN",0
+
 ; states are 0 = dead, 1 = walking, 2 = squished Goomba  idle shell, 3 = sliding shell, 4 = goomba squished
 enemyState: times MAX_ENEMIES db 0
 enemyType:  times MAX_ENEMIES db 0    ; 0 = goomba, 1 = koopa
