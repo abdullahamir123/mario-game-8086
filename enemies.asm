@@ -9,8 +9,10 @@ drawEnemies:
 
 .loopEnemy:
   CMP BYTE [enemyState + SI], 0
-  JE .nextEnemy ; 0 means dead so dont draw
+  JNE .checkVisible
+  JMP .nextEnemy ; 0 means dead so dont draw
 
+.checkVisible:
   ; convert worldX to screenX so we can skip enemies outside the screen
   MOV AX, [enemyX + DI]
   SUB AX, [cameraX]
@@ -43,7 +45,10 @@ drawEnemies:
 .nextEnemy:
   INC SI
   ADD DI, 2
-  LOOP .loopEnemy
+  DEC CX
+  JZ .doneDrawEnemies
+  JMP .loopEnemy
+.doneDrawEnemies:
   RET
 
 
@@ -54,8 +59,10 @@ updateEnemies:
   MOV CX, MAX_ENEMIES
 .loop:
   CMP BYTE [enemyState + SI], 0
-  JE .next
+  JNE .checkSquished
+  JMP .next
 
+.checkSquished:
   ; state 4 is squished goomba, wait for timer to finish then remove it
   CMP BYTE [enemyState + SI], 4
   JNE .checkTimer
@@ -76,7 +83,10 @@ updateEnemies:
 .next:
   INC SI
   ADD DI, 2
-  LOOP .loop
+  DEC CX
+  JZ .doneUpdateEnemies
+  JMP .loop
+.doneUpdateEnemies:
   RET
 
 
@@ -172,7 +182,9 @@ checkEnemiesCollision:
 .nextEnemy:
   INC SI
   ADD DI, 2
-  LOOP .loop
+  DEC CX
+  JZ .done
+  JMP .loop
 
 .done:
   RET
@@ -199,12 +211,16 @@ onMarioHitEnemy:
 .checkStomp:
   ; must be falling and marios feet near top half of enemy
   CMP WORD [marioVelY], 0
-  JLE .notStomp
+  JG .checkTopHalf
+  JMP .notStomp
+.checkTopHalf:
   MOV AX, [marioWorldY]
   ADD AX, 6
   CMP AX, [enemyY + DI]
-  JG .notStomp
+  JLE .doStomp
+  JMP .notStomp
 
+.doStomp:
   ; bounce mario up and give 100 score
   MOV WORD [marioVelY], -32
   MOV BYTE [isOnGround], 0
@@ -223,24 +239,32 @@ onMarioHitEnemy:
   MOV BYTE [enemyState + SI], 2 ; koopa or moving shell becomes idle shell
   MOV WORD [enemyVelX + DI], 0
   JMP .survived
+
 .notStomp:
   ; if sliding shell was just kicked, ignore hit until grace timer hits 0
   CMP BYTE [enemyState + SI], 3
   JNE .hurtMario
   CMP BYTE [enemyTimer + SI], 0
-  JG .survived
+  JLE .hurtMario
+  JMP .survived
+
 .hurtMario:
   CMP BYTE [invulnerabilityTimer], 0
-  JG .survived 
-  CMP WORD [superMario], 0 
-  JE .marioDied
-  MOV WORD [superMario], 0 
+  JLE .checkPower
+  JMP .survived
+.checkPower:
+  CMP WORD [superMario], 0
+  JNE .loseSuper
+  JMP .marioDied
+.loseSuper:
+  MOV WORD [superMario], 0
   MOV BYTE [invulnerabilityTimer], 90
   PUSH SI
   MOV SI, sfxBump
   CALL playSound
   POP SI
   JMP .survived
+
 .marioDied:
   CALL resetLevel ; lose a life
   MOV AL, 1
@@ -258,8 +282,10 @@ checkShellCollisions:
 
 .outerLoop:
   CMP BYTE [enemyState + SI], 3
-  JNE .nextI ; only sliding shells can kill other enemies
+  JE .runInner
+  JMP .nextI ; only sliding shells can kill other enemies
 
+.runInner:
   PUSH CX ; save outer loop count before inner loop uses CX
   XOR BX, BX ; target byte index
   XOR BP, BP ; target word index
@@ -278,14 +304,18 @@ checkShellCollisions:
 .nextJ:
   INC BX
   ADD BP, 2
-  LOOP .innerLoop
+  DEC CX
+  JNZ .innerLoop
 
   POP CX
 
 .nextI:
   INC SI
   ADD DI, 2
-  LOOP .outerLoop
+  DEC CX
+  JZ .doneShellCollisions
+  JMP .outerLoop
+.doneShellCollisions:
   RET
 
 
@@ -330,5 +360,8 @@ resetEnemies:
 
   INC SI
   ADD DI, 2
-  LOOP .loop
+  DEC CX
+  JZ .doneResetEnemies
+  JMP .loop
+.doneResetEnemies:
   RET
