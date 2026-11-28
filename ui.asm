@@ -56,6 +56,10 @@ startScreen:
   MOV SI, startText
   CALL drawString
 
+  MOV DI, (180*SCREEN_WIDTH) + 65
+  MOV SI, nameText
+  CALL drawString
+
   CALL screenSync
   CALL displayFrame
 
