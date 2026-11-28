@@ -214,6 +214,10 @@ input:
   JNE .noJump
   MOV WORD [marioVelY], -44
   MOV BYTE [isOnGround], 0
+  PUSH SI
+  MOV SI, sfxJump
+  CALL playSound
+  POP SI
 .noJump:
   ; variable jump height: if mario is moving up and jump key is released, cut upward speed
   CMP WORD [marioVelY], -12

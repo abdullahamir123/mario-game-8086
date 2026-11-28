@@ -699,7 +699,95 @@ initialworldMap:
   db 2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0,0,2,0,0,2,0,0,2,2,2,2
   db 2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2
   db 2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2
+sfxPtr:         dw 0
+sfxTimer:       db 0
+bgmEnabled:     db 1
+bgmPtr:         dw bgmOverworld
+bgmTimer:       db 0
 
+sfxJump:        dw 3044, 3, 2281, 3, 1811, 3, 1356, 4, 0xFFFF
+sfxCoin:        dw 1208, 5, 905, 11, 0xFFFF
+sfxBump:        dw 5424, 5, 6088, 6, 0xFFFF
+sfxStomp:       dw 2033, 4, 1356, 4, 2712, 6, 0xFFFF
+sfxPowerup:     dw 2281, 4, 1811, 4, 1522, 4, 1140, 4, 905, 7, 0xFFFF
+sfxDie:         dw 1811, 5, 2033, 5, 2281, 5, 2712, 8, 0xFFFF
+sfxWin:         dw 2281, 4, 1811, 4, 1522, 4, 1140, 5, 0, 2, 1522, 4, 1140, 10, 0xFFFF
+
+bgmOverworld:
+  ; Intro: E5 E5 . E5 . C5 E5 G5 . G4
+  dw 1811, 5
+  dw 0,    4
+  dw 1811, 5
+  dw 0,    9
+  dw 1811, 5
+  dw 0,    9
+  dw 2281, 5
+  dw 1811, 7
+  dw 0,    3
+  dw 1522, 10
+  dw 0,    16
+  dw 3044, 10
+  dw 0,    16
+
+  ; Melody Part A: C5 . G4 . E4 . A4 B4 Bb4 A4 G4 E5 G5 A5 F5 G5 . E5 C5 D5 B4
+  dw 2281, 7
+  dw 0,    9
+  dw 3044, 7
+  dw 0,    9
+  dw 3616, 7
+  dw 0,    9
+  dw 2712, 6
+  dw 0,    4
+  dw 2415, 6
+  dw 0,    4
+  dw 2560, 5
+  dw 2712, 7
+  dw 0,    5
+  dw 3044, 6
+  dw 1811, 6
+  dw 1522, 6
+  dw 1356, 8
+  dw 0,    5
+  dw 1709, 5
+  dw 1522, 5
+  dw 0,    8
+  dw 1811, 7
+  dw 0,    4
+  dw 2281, 5
+  dw 2033, 5
+  dw 2415, 8
+  dw 0,    14
+
+  ; Repeat Part A
+  dw 2281, 7
+  dw 0,    9
+  dw 3044, 7
+  dw 0,    9
+  dw 3616, 7
+  dw 0,    9
+  dw 2712, 6
+  dw 0,    4
+  dw 2415, 6
+  dw 0,    4
+  dw 2560, 5
+  dw 2712, 7
+  dw 0,    5
+  dw 3044, 6
+  dw 1811, 6
+  dw 1522, 6
+  dw 1356, 8
+  dw 0,    5
+  dw 1709, 5
+  dw 1522, 5
+  dw 0,    8
+  dw 1811, 7
+  dw 0,    4
+  dw 2281, 5
+  dw 2033, 5
+  dw 2415, 8
+  dw 0,    14
+
+  dw 0xFFFF
 bufferSegment: dw 0
 
 stackSpace: times 1024 db 0

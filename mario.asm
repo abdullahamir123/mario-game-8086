@@ -66,6 +66,7 @@ START:
 
   CALL startScreen
   CALL resetEnemies
+  CALL initSound
 
 gameLoop:
   ;always ensure ES points to the backbuffer before drawing
@@ -133,7 +134,7 @@ resetLevel:
   MOV SI, sfxDie
   CALL playSound
   POP SI
-  MOV CX, 26              ; let the full 4-note death melody finish (~0.37 sec)
+  MOV CX, 26
   CALL screenPause
   MOV WORD [sfxPtr], 0
   MOV BYTE [sfxTimer], 0
@@ -200,9 +201,9 @@ terminate:
   MOV AX, 4C00H
   INT 21H
 
-%include "mario/ui.asm"
-%include "mario/sound.asm"
-%include "mario/render.asm"
-%include "mario/player.asm"
-%include "mario/enemies.asm"
-%include "mario/data.asm"
+%include "ui.asm"
+%include "sound.asm"
+%include "render.asm"
+%include "player.asm"
+%include "enemies.asm"
+%include "data.asm"
